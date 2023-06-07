@@ -1,0 +1,37 @@
+<resources>
+	<string name="app_name">ble_explorer</string>
+	<string name="ble_scan">BLE Scan</string>
+	<string name="connected_devices">Connected Devices</string>
+	<string name="mac_address">Mac Address</string>
+	<string name="device_name">Device Name</string>
+	<string name="service_uuid">Service UUIDs</string>
+	<string name="scan_record_bytes">Scan Record Bytes</string>
+	<string name="adv_data_bytes">Advertisement Data Bytes</string>
+	<string name="explore">Explore</string>
+	<string name="connect">Connect</string>
+	<string name="ble_devices">BLE Devices</string>
+	<string name="scan">Scan</string>
+	<string name="rssi">RSSI</string>
+	<string name="tx_power">TX Power</string>
+	<string name="go_to_settings">Go to settings</string>
+	<string name="dismiss">Dismiss</string>
+
+	<string name="properties">Properties</string>
+	<string name="permissions">Permissions</string>
+
+	<string name="unrecognized">Unrecognized</string>
+	<string name="service">Service</string>
+	<string name="characteristic">Characteristic</string>
+	<!--	PERMISSIONS	-->
+	<string name="scan_permission_reason">This is a BLE app, it needs permissions to perform BLE scans.</string>
+	<string name="scan_permission_declined">This is a BLE app, it needs permissions to perform BLE scans. You can set this permission by going to the device settings and granting this permission for this app.</string>
+
+	<string name="connect_permission_reason">This is a BLE app, it needs permissions to connect to BLE devices.</string>
+	<string name="connect_permission_declined">This is a BLE app, it needs permissions to connect to BLE devices. You can set this permission by going to the device settings and granting this permission for this app.</string>
+
+	<string name="fine_location_permission_reason">This is a BLE app, Android version 11 and under requires fine location permissions to scan for and connect to BLE devices.</string>
+	<string name="fine_permission_declined">This is a BLE app, Android version 11 and under requires fine location permissions to scan for and connect to BLE devices. You can set this permission by going to the device settings and granting this permission for this app.</string>
+	
+	<string name="coarse_location_permission_reason">This is a BLE app, Android version 11 and under requires coarse location permissions to scan for and connect to BLE devices.</string>
+	<string name="coarse_permission_declined">This is a BLE app, Android version 11 and under requires coarse location permissions to scan for and connect to BLE devices. You can set this permission by going to the device settings and granting this permission for this app.</string>
+</resources>
