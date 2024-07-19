@@ -31,9 +31,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -146,13 +148,30 @@ open class BleConnection constructor(
 				{
 					return@launch
 				}
-				gatt?.close()
+				gatt?.apply {
+					disconnect()
+					close()
+				}
 			}
 		}
 	}
 
-	/** Connect to the [device] if not already connected. */
-	suspend fun connect()
+	/**
+	 * Connect to the [device] if not already connected.
+	 *
+	 * @param autoConnect
+	 *   The [BluetoothDevice.connectGatt] autoConnect parameter indicating
+	 *   whether to directly connect to the remote device (false) or to
+	 *   automatically connect as soon as the remote device becomes available
+	 *   (true).
+	 * @param timeoutMillis
+	 *   The time in milliseconds to wait for the connection to be established
+	 *   before failing and cancelling the connection attempt.
+	 */
+	suspend fun connect(
+		autoConnect: Boolean = true,
+		timeoutMillis: Long = 5_000,
+		timeoutAction: suspend () -> Unit)
 	{
 		if (_connectionState.value == CONNECTED)
 		{
@@ -166,12 +185,23 @@ open class BleConnection constructor(
 				.getRemoteDevice(device.macAddress)
 				.connectGatt(
 					context,
-					true,
+					autoConnect,
 					this,
 					BluetoothDevice.TRANSPORT_LE
 				)
+			ioScope.launch {
+				delay(timeoutMillis)
+				if (isActive && _connectionState.value != CONNECTED)
+				{
+					_connectionState.value = CONNECTION_FAILED
+					timeoutAction()
+					gatt?.close()
+				}
+			}
 		}
 	}
+
+
 
 	////////////////////////////////////////////////////////////////////////////
 	//                             BLE Requests                               //
@@ -687,13 +717,27 @@ open class BleConnection constructor(
 			mutex.withLock {
 				lastCharacterWriteRequest?.let {
 					val result = KnownGattStatusCode[status]
-					Log.d(
-						"BLE_Characteristic_Write",
-						"${characteristic.uuid}: $result")
-					it.gattResponseHandler(result)
+					if (result != KnownGattStatusCode.SUCCESS) {
+						if(!it.resendLastPayload(gatt, characteristic)) {
+							if(it.gattResponseHandler(result)) {
+								processNextRequest()
+							}
+						}
+					} else {
+						if (it.isComplete)
+						{
+							lastCharacterWriteRequest = null
+							if(it.gattResponseHandler(result)) {
+								processNextRequest()
+							}
+						}
+						else
+						{
+							it.request(gatt, characteristic)
+						}
+					}
 				}
-				lastCharacterWriteRequest = null
-				processNextRequest()
+
 			}
 		}
 	}
@@ -730,6 +774,9 @@ open class BleConnection constructor(
 		descriptor: BluetoothGattDescriptor,
 		status: Int)
 	{
+		// TODO need to handle:
+		//  1. write failure
+		//  2. still more bytes to write (!isComplete)
 		defaultScope.launch {
 			mutex.withLock {
 				lastDescriptorWriteRequest?.let {

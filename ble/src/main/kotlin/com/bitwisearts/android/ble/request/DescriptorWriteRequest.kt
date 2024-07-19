@@ -33,7 +33,7 @@ class DescriptorWriteRequest constructor (
 	override val identifier: DescriptorId,
 	mtu: Int,
 	payload: ByteArray,
-	gattResponseHandler: (GattStatusCode) -> Unit
+	gattResponseHandler: (GattStatusCode) -> Boolean
 ): BleWriteRequest<BluetoothGattDescriptor, DescriptorId>(
 	mtu, payload, gattResponseHandler)
 {

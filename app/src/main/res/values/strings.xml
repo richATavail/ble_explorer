@@ -13,6 +13,7 @@
 	<string name="scan">Scan</string>
 	<string name="rssi">RSSI</string>
 	<string name="tx_power">TX Power</string>
+	<string name="ok">Ok</string>
 	<string name="go_to_settings">Go to settings</string>
 	<string name="dismiss">Dismiss</string>
 

@@ -24,12 +24,13 @@ import com.bitwisearts.android.ble.gatt.attribute.AttributeId
  *   in chunks.
  * @property gattResponseHandler
  *   The lambda that accepts the [GattStatusCode] responsible for handling the
- *   response to this [BleWriteRequest].
+ *   response to this [BleWriteRequest]. Answer `true` if the next request
+ *   should be processed; `false` otherwise.
  */
 sealed class BleWriteRequest<Attribute, Id: AttributeId> constructor (
 	private val mtu: Int,
 	private val payload: ByteArray,
-	val gattResponseHandler: (GattStatusCode) -> Unit
+	val gattResponseHandler: (GattStatusCode) -> Boolean
 ) : BleRequest<Attribute, Id>(), Iterator<ByteArray>
 {
 	/**
@@ -38,9 +39,28 @@ sealed class BleWriteRequest<Attribute, Id: AttributeId> constructor (
 	 */
 	private var startIndexOfNextSend: Int = 0
 
+	/**
+	 * The bytes that were last sent to the [Attribute] as the [next] bytes.
+	 */
+	protected var bytesLastSent: ByteArray = byteArrayOf()
+
+	/**
+	 * The number of times this [BleWriteRequest] has been attempted to be
+	 * resent.
+	 */
+	protected var resendAttempts: Int = 0
+		private set
+
 	override fun hasNext(): Boolean = payload.size > startIndexOfNextSend
 
 	override val isComplete: Boolean get() = !hasNext()
+
+	/**
+	 * Answer the [bytesLastSent] if the [resendAttempts] is less than 3,
+	 * otherwise answer `null` to indicate that no more attempts should be made.
+	 */
+	fun resendBytes(): ByteArray? =
+		if(++resendAttempts < 3) bytesLastSent else null
 
 	override fun next(): ByteArray
 	{
@@ -61,6 +81,8 @@ sealed class BleWriteRequest<Attribute, Id: AttributeId> constructor (
 		val bytesToSend =
 			payload.copyOfRange(startIndexOfNextSend, nextEndIndexExclusive)
 		startIndexOfNextSend = nextEndIndexExclusive
+		bytesLastSent = bytesToSend
+		resendAttempts = 0
 		return bytesToSend
 	}
 }

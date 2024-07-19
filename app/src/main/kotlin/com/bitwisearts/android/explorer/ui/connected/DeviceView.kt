@@ -14,7 +14,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -77,9 +77,9 @@ fun DeviceView (
 		}
 	}
 	// TODO do something if bluetooth is turned off...
-	val bluetoothEnabled =
-		viewModel.bluetoothEnabled.collectAsState().value
-	val connectionState = viewModel.connectionState.collectAsState().value
+	val bluetoothEnabled by
+		viewModel.bluetoothEnabled.collectAsStateWithLifecycle()
+	val connectionState by viewModel.connectionState.collectAsStateWithLifecycle()
 	val advertisement: Advertisement? by
 		remember { mutableStateOf(viewModel.selectedAdvertisement)}
 	Column(
@@ -102,7 +102,7 @@ fun DeviceView (
 				Text(text = stringResource(id = R.string.connect))
 			}
 		}?: Text(text = "Still gotta build this!!! Show $macAddress")
-		val services = viewModel.services.collectAsState().value
+		val services = viewModel.services.collectAsStateWithLifecycle().value
 		services.forEach { (k, v) ->
 			Log.d("DeviceView", "Adding Service $k")
 			ServiceView(v)
@@ -249,9 +249,11 @@ class DeviceViewModel: ViewModel()
 	 */
 	val connection: BleConnection =
 		BleConnection(
-			device,
-			ExplorerApp.app.bleScanManager.bluetoothManager,
-			ExplorerApp.app.baseContext)
+			device = device,
+			bluetoothManager = ExplorerApp.app.bleScanManager.bluetoothManager,
+			context = ExplorerApp.app.baseContext,
+			ioScope = viewModelScope,
+			defaultScope = viewModelScope)
 		{
 			Log.d("DeviceViewModel", "~~~~ Device Connected ~~~~")
 		}
@@ -269,7 +271,12 @@ class DeviceViewModel: ViewModel()
 	fun connect ()
 	{
 		viewModelScope.launch {
-			connection.connect()
+			connection.connect {
+				Log.d(
+					"DeviceViewModel",
+					"~~~~ Device Failed to Connect ~~~~")
+
+			}
 		}
 	}
 

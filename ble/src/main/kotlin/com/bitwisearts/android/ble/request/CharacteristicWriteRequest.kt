@@ -49,7 +49,7 @@ class CharacteristicWriteRequest constructor (
 	mtu: Int,
 	payload: ByteArray,
 	val writeType: Int = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT,
-	gattResponseHandler: (GattStatusCode) -> Unit
+	gattResponseHandler: (GattStatusCode) -> Boolean
 ): BleWriteRequest<BluetoothGattCharacteristic, CharacteristicId>(
 	mtu, payload, gattResponseHandler)
 {
@@ -70,5 +70,29 @@ class CharacteristicWriteRequest constructor (
 			attribute.value = next()
 			gatt.writeCharacteristic(attribute)
 		}
+	}
+
+	/**
+	 * Attempt to resend the [bytesLastSent]. Answer `true` if the payload was
+	 * resent, `false` if the maximum number of resend attempts has been
+	 * reached.
+	 */
+	@SuppressLint("MissingPermission")
+	fun resendLastPayload(
+		gatt: BluetoothGatt,
+		attribute: BluetoothGattCharacteristic
+	): Boolean {
+		val bytes = resendBytes() ?: return false
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+			gatt.writeCharacteristic(
+				attribute,
+				bytes,
+				writeType
+			)
+		} else {
+			attribute.value = bytes
+			gatt.writeCharacteristic(attribute)
+		}
+		return true
 	}
 }

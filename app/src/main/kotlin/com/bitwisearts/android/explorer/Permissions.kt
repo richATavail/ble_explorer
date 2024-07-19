@@ -30,14 +30,13 @@ sealed interface ExplorerPermission
 	 */
 	val declinedText: Int
 
-	// TODO
 	@Composable
 	fun PermissionDialog(
 		isPermanentlyDeclined: Boolean,
 		onDismiss: () -> Unit,
 		requestPermission: () -> Unit,
 		gotoSettings: () -> Unit,
-		modifier: Modifier = Modifier
+		modifier: Modifier
 	) {
 		AlertDialog(
 			modifier = modifier,
@@ -73,7 +72,7 @@ sealed interface ExplorerPermission
 						}
 						else
 						{
-							android.R.string.ok
+							R.string.ok
 						}),
 					modifier = Modifier.clickable {
 						if (isPermanentlyDeclined)

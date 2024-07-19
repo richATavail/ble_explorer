@@ -13,7 +13,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
@@ -23,6 +23,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -71,9 +72,9 @@ fun ScannerView (
 				.padding(all = 20.dp)
 				.fillMaxWidth())
 		{
-			val isScanning = viewModel.isScanning.collectAsState().value
-			val bluetoothEnabled =
-				viewModel.bluetoothEnabled.collectAsState().value
+			val isScanning by viewModel.isScanning.collectAsStateWithLifecycle()
+			val bluetoothEnabled by
+				viewModel.bluetoothEnabled.collectAsStateWithLifecycle()
 			Text(
 				text = stringResource(R.string.ble_devices),
 				fontSize = 30.sp,
