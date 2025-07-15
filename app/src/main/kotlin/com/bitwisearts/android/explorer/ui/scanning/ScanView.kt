@@ -1,6 +1,7 @@
 package com.bitwisearts.android.explorer.ui.scanning
 
 import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,7 +16,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -23,6 +23,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -44,6 +45,7 @@ fun ScannerView (
 	lifecycleOwner: LifecycleOwner = LocalLifecycleOwner.current,
 	viewModel: ScannerViewModel = viewModel())
 {
+	BackHandler {  }
 	// If `lifecycleOwner` changes, dispose and reset the effect
 	DisposableEffect(lifecycleOwner) {
 		// Create an observer that triggers our remembered callbacks
