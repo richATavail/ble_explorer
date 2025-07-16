@@ -1,6 +1,7 @@
 package com.bitwisearts.android.ble
 
 import com.bitwisearts.android.ble.advertisement.Advertisement
+import com.bitwisearts.android.ble.gatt.attribute.Characteristic
 import com.bitwisearts.android.ble.gatt.attribute.CharacteristicChangeNotification
 
 /**
@@ -32,4 +33,9 @@ open class BleDevice constructor(
 	{
 		// Do nothing by default
 	}
+
+	/**
+	 *
+	 */
+	open val notifyCharacteristics: List<Characteristic> = emptyList()
 }

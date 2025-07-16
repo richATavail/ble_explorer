@@ -261,7 +261,7 @@ open class BleConnection constructor(
 			is DescriptorWriteRequest ->
 				bleRequest.gattResponseHandler(GattNoConnection)
 			is EnableNotifyCharacteristicRequest ->
-				bleRequest.resultHandler(false)
+				bleRequest.resultHandler(false, null)
 		}
 	}
 
@@ -374,7 +374,7 @@ open class BleConnection constructor(
 								"Attempted to enable notify on " +
 									"characteristic, ${bleRequest.identifier}, " +
 									"but characteristic not found.")
-							bleRequest.resultHandler(false)
+							bleRequest.resultHandler(false, null)
 							return
 						}
 
@@ -387,7 +387,7 @@ open class BleConnection constructor(
 								"BleConnection",
 								"Enable notify on characteristic," +
 									"${bleRequest.identifier}, success: $enabled")
-							bleRequest.resultHandler(enabled)
+							bleRequest.resultHandler(enabled, null)
 						}
 						else
 						{
@@ -396,7 +396,7 @@ open class BleConnection constructor(
 								"Attempted to enable notify on " +
 									"characteristic, ${bleRequest.identifier}, " +
 									"but characteristic does not support notify.")
-							bleRequest.resultHandler(false)
+							bleRequest.resultHandler(false, null)
 						}
 					} ?: run {
 						Log.w(
@@ -405,7 +405,7 @@ open class BleConnection constructor(
 								"characteristic, ${bleRequest.identifier}, but " +
 								"no BLE connection is available."
 						)
-						bleRequest.resultHandler(false)
+						bleRequest.resultHandler(false, null)
 					}
 					processNextRequest()
 				}
@@ -636,6 +636,34 @@ open class BleConnection constructor(
 					_gattDescriptorMap.value = descrMap
 					if (_connectionState.value == DISCOVERING_SERVICES)
 					{
+						// TODO make sure we transition to being fully connected
+						//  only after all requested notifications are enabled.
+						device.notifyCharacteristics.forEach {
+							submitBleRequest(
+								EnableNotifyCharacteristicRequest(
+									it.characteristicId,
+									this@BleConnection,
+									ioScope
+								) { success, status ->
+									if (!success)
+									{
+										Log.w(
+											"Enable Notify Failed",
+											"${device.logLabel}: " +
+												"Characteristic: $it " +
+												if (status != null)
+												{
+													"Status: ${status.display}"
+												}
+												else
+												{
+													"Characteristic not found"
+												}
+										)
+									}
+								}
+							)
+						}
 						// This connection is now ready for general use.
 						_connectionState.value = CONNECTED
 						afterServicesDiscovered(this@BleConnection)

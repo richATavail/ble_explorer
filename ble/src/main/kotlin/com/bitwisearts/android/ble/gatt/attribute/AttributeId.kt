@@ -31,6 +31,13 @@ data class CharacteristicId constructor (
 	override val characteristicId: UUID
 ): AttributeId
 {
+	/**
+	 * Answer a [DescriptorId] that uniquely identifies a
+	 * [BluetoothGattDescriptor] for the given [Descriptor.uuid].
+	 */
+	fun descriptorId(descriptorId: UUID): DescriptorId =
+		DescriptorId(serviceId, characteristicId, descriptorId)
+
 	override fun toString(): String =
 		"service ($serviceId) - characteristic ($characteristicId)"
 }
