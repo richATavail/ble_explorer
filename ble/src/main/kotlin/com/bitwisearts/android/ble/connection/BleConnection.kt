@@ -40,6 +40,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.UUID
+import kotlin.math.min
 
 /**
  * The [BluetoothGattCallback] that represents an active connection to a
@@ -590,8 +591,9 @@ open class BleConnection constructor(
 			"MTU_CHANGED",
 			"MTU Value: $mtu (${KnownGattStatusCode[status]})")
 		this.mtu =
-			if (status == KnownGattStatusCode.SUCCESS.code) mtu
-			else DEFAULT_GATT_MIN_MTU_SIZE
+			if (status == KnownGattStatusCode.SUCCESS.code)
+				min(mtu - HEADER_ATT_SIZE, ADJUSTED_MAX_MTU_SIZE)
+			else ADJUSTED_MIN_MTU_SIZE
 
 		// We don't bother trying to make a next request if the connection
 		// times out.
@@ -853,16 +855,65 @@ open class BleConnection constructor(
 	companion object
 	{
 		/**
+		 * The L2CAP Header (Logical Link Control and Adaptation Protocol) is
+		 * the number of bytes that must be accounted for in the MTU; this is
+		 * the first 4 bytes of the transmitted payload.
+		 */
+		private const val HEADER_L2CAP_SIZE: Int = 4
+
+		/**
+		 * The ATT Header represents the number of bytes that must be accounted
+		 * for which includes the operation code (1 byte) and the attribute
+		 * handle (2 bytes).
+		 */
+		private const val HEADER_ATT_SIZE: Int = 3
+
+		/**
+		 * The total number of bytes that must be attributed to the BLE header
+		 * for a which includes the L2CAP header (first 4 bytes) and the ATT
+		 * header (3 bytes).
+		 */
+		private const val TOTAL_HEADER_BLE_SIZE: Int =
+			HEADER_L2CAP_SIZE + HEADER_ATT_SIZE
+
+		/**
 		 * The purported maximum maximum transmission unit (MTU) for Android. It
 		 * is used to negotiate the MTU for the connected device.
+		 *
+		 * Though this is the official maximum, many devices per Bluetooth 4.2
+		 * with the Data Length Extension (DLE), we can effectively transmit up
+		 * to 251 bytes total.
+		 *
+		 * Note that the MTU includes the ATT header (3 bytes) and L2CAP Header
+		 * (4 bytes), so the actual maximum payload is
+		 *
+		 * ```kotlin
+		 * DEFAULT_GATT_MAX_MTU_SIZE - HEADER_L2CAP_SIZE - HEADER_ATT_SIZE
+		 * ```
 		 */
 		private const val DEFAULT_GATT_MAX_MTU_SIZE = 517
 
 		/**
-		 * The purported minimum maximum transmission unit is 23. It is reduced
+		 * The purported minimum maximum transmission unit is 27. It is reduced
 		 * by 3 bytes to accommodate the ATT header: OP-Code (1 byte) and
-		 * Attribute Handle (2 bytes). Used if MTU negotiation fails.
+		 * Attribute Handle (2 bytes) and 4 bytes . Used if MTU negotiation fails.
 		 */
-		private const val DEFAULT_GATT_MIN_MTU_SIZE = 20
+		private const val DEFAULT_GATT_MIN_MTU_SIZE = 27
+
+		/**
+		 * The maximum number of bytes that can be sent in a single transmission
+		 * accounting for the [HEADER_L2CAP_SIZE] and [HEADER_ATT_SIZE] starting
+		 * with [DEFAULT_GATT_MAX_MTU_SIZE] as the base MTU.
+		 */
+		const val ADJUSTED_MAX_MTU_SIZE: Int =
+			DEFAULT_GATT_MAX_MTU_SIZE - TOTAL_HEADER_BLE_SIZE
+
+		/**
+		 * The minimum number of bytes that can be sent in a single transmission
+		 * accounting for the [HEADER_L2CAP_SIZE] and [HEADER_ATT_SIZE] starting
+		 * with [DEFAULT_GATT_MIN_MTU_SIZE] as the base MTU.
+		 */
+		const val ADJUSTED_MIN_MTU_SIZE: Int =
+			DEFAULT_GATT_MIN_MTU_SIZE - TOTAL_HEADER_BLE_SIZE
 	}
 }
