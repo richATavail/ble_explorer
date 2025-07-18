@@ -9,9 +9,22 @@ import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothManager
 import android.content.Context
+import android.os.Handler
+import android.os.HandlerThread
 import android.util.Log
-import com.bitwisearts.android.ble.connection.BleConnectionState.*
 import com.bitwisearts.android.ble.BleDevice
+import com.bitwisearts.android.ble.connection.BleConnection.Companion.DEFAULT_GATT_MAX_MTU_SIZE
+import com.bitwisearts.android.ble.connection.BleConnection.Companion.DEFAULT_GATT_MIN_MTU_SIZE
+import com.bitwisearts.android.ble.connection.BleConnection.Companion.HEADER_ATT_SIZE
+import com.bitwisearts.android.ble.connection.BleConnection.Companion.HEADER_L2CAP_SIZE
+import com.bitwisearts.android.ble.connection.BleConnectionState.CONNECTED
+import com.bitwisearts.android.ble.connection.BleConnectionState.CONNECTING
+import com.bitwisearts.android.ble.connection.BleConnectionState.CONNECTION_FAILED
+import com.bitwisearts.android.ble.connection.BleConnectionState.DISCONNECTED
+import com.bitwisearts.android.ble.connection.BleConnectionState.DISCONNECTING
+import com.bitwisearts.android.ble.connection.BleConnectionState.DISCONNECT_REQUESTED
+import com.bitwisearts.android.ble.connection.BleConnectionState.DISCOVERING_SERVICES
+import com.bitwisearts.android.ble.connection.BleConnectionState.MTU_NEGOTIATION
 import com.bitwisearts.android.ble.gatt.GattNoAttribute
 import com.bitwisearts.android.ble.gatt.GattNoConnection
 import com.bitwisearts.android.ble.gatt.GattStatusCode
@@ -29,6 +42,7 @@ import com.bitwisearts.android.ble.request.EnableNotifyCharacteristicRequest
 import com.bitwisearts.android.ble.utility.asHex
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -152,10 +166,16 @@ open class BleConnection constructor(
 				gatt?.apply {
 					disconnect()
 					close()
+					handlerThread?.quitSafely()
+					handlerThread = null
 				}
 			}
 		}
 	}
+
+	private var timeoutJob: Job? = null
+
+	private var handlerThread: HandlerThread? = null
 
 	/**
 	 * Connect to the [device] if not already connected.
@@ -168,41 +188,60 @@ open class BleConnection constructor(
 	 * @param timeoutMillis
 	 *   The time in milliseconds to wait for the connection to be established
 	 *   before failing and cancelling the connection attempt.
+	 * @param prioritySetting
+	 *   The [BleConnection.ConnectionPriority] setting for the connection
+	 *   priority.
+	 * @param phy
+	 *   The [BleConnection.PhysicalLayer] setting that determines the PHY
+	 *   used for this connection.
+	 * @param timeoutAction
+	 *   The lambda that is executed if the connection attempt times out.
 	 */
 	suspend fun connect(
 		autoConnect: Boolean = true,
-		timeoutMillis: Long = 5_000,
+		timeoutMillis: Long = 6_000L,
+		prioritySetting: ConnectionPriority = ConnectionPriority.BALANCED,
+		phy: PhysicalLayer = PhysicalLayer.PHY_2M,
 		timeoutAction: suspend () -> Unit)
 	{
 		if (_connectionState.value == CONNECTED)
 		{
 			return
 		}
+		this.prioritySetting = prioritySetting
 		_connectionState.value = CONNECTING
 		mutex.withLock {
 			// If gatt present attempt a reconnect, otherwise create a new
 			// connection.
+			handlerThread?.quitSafely()
+			val tempThread = HandlerThread("BleConnectionHandlerThread").apply {
+				handlerThread = this
+				start()
+			}
+			val handler = Handler(tempThread.looper)
 			gatt?.connect() ?: bluetoothManager.adapter
 				.getRemoteDevice(device.macAddress)
 				.connectGatt(
 					context,
 					autoConnect,
 					this,
-					BluetoothDevice.TRANSPORT_LE
+					BluetoothDevice.TRANSPORT_LE,
+					phy.code,
+					handler
 				)
-			ioScope.launch {
+			timeoutJob?.cancel()
+			timeoutJob = ioScope.launch {
 				delay(timeoutMillis)
 				if (isActive && _connectionState.value != CONNECTED)
 				{
 					_connectionState.value = CONNECTION_FAILED
 					timeoutAction()
 					gatt?.close()
+					Log.i("BleConnection","Connection attempt locally timed out.")
 				}
 			}
 		}
 	}
-
-
 
 	////////////////////////////////////////////////////////////////////////////
 	//                             BLE Requests                               //
@@ -426,6 +465,19 @@ open class BleConnection constructor(
 	//                    BluetoothGattCallback Overrides                     //
 	////////////////////////////////////////////////////////////////////////////
 	/**
+	 * The [ConnectionPriority] setting for the connection priority. Default is
+	 * balanced.
+	 */
+	private var prioritySetting: ConnectionPriority =
+		ConnectionPriority.BALANCED
+
+	/**
+	 * The [PhysicalLayer] setting that determines the PHY used for this
+	 * connection. Default is 1M.
+	 */
+	private var phy: PhysicalLayer = PhysicalLayer.PHY_1M
+
+	/**
 	 * The [MutableStateFlow] containing the map of
 	 * [BluetoothGattService.getUuid] to the corresponding
 	 * [BluetoothGattService].
@@ -513,6 +565,12 @@ open class BleConnection constructor(
 		val gattStatusCode = KnownGattStatusCode[status]
 		val newConnectionState = BleConnectionState[newState]
 		val previousState = _connectionState.value
+		Log.i(
+			"BLE Connection State Change",
+			"${device.logLabel}: " +
+				"New State: $newConnectionState ($newState) " +
+				"Status: ${gattStatusCode.display}\n" +
+				"Previous State: $previousState")
 		if (newConnectionState == previousState)
 		{
 			return
@@ -523,13 +581,13 @@ open class BleConnection constructor(
 			{
 				if (gattStatusCode == KnownGattStatusCode.SUCCESS)
 				{
-					Log.i("BLE Connected",device.logLabel)
+					timeoutJob?.cancel()
+					timeoutJob = null
 					if (_connectionState.value != DISCONNECT_REQUESTED)
 					{
-						// We need to establish the available services
-						// before we release the gatt for use.
-						_connectionState.value = DISCOVERING_SERVICES
+						Log.i("BLE Connected","Triggering MTU negotiation")
 						ioScope.launch {
+							delay(200)
 							_connectionState.value = MTU_NEGOTIATION
 							gatt.requestMtu(DEFAULT_GATT_MAX_MTU_SIZE)
 						}
@@ -614,6 +672,10 @@ open class BleConnection constructor(
 				mutex.withLock {
 					// The GATT services are fully populated and ready for use.
 					this@BleConnection.gatt = gatt
+					val priorityResult = gatt.requestConnectionPriority(prioritySetting.code)
+					Log.d(
+						"BLE_Connection_Priority",
+						"Set connection priority to $prioritySetting: $priorityResult")
 					val serviceMap = mutableMapOf<UUID, BluetoothGattService>()
 					val charMap = 
 						mutableMapOf<CharacteristicId, BluetoothGattCharacteristic>()
@@ -636,6 +698,8 @@ open class BleConnection constructor(
 					_gattDescriptorMap.value = descrMap
 					if (_connectionState.value == DISCOVERING_SERVICES)
 					{
+						val prioritySetting =
+							gatt.requestConnectionPriority(prioritySetting.code)
 						// TODO make sure we transition to being fully connected
 						//  only after all requested notifications are enabled.
 						device.notifyCharacteristics.forEach {
@@ -688,7 +752,7 @@ open class BleConnection constructor(
 	{
 		// Read as soon as possible to avoid race condition with a subsequent
 		// change
-		val received = characteristic.value
+		val received = characteristic.value?.clone() ?: ByteArray(0)
 		Log.d(
 			"Characteristic Changed",
 			"${characteristic.uuid}: ${received.asHex}")
@@ -717,12 +781,11 @@ open class BleConnection constructor(
 		characteristic: BluetoothGattCharacteristic,
 		status: Int)
 	{
-		// Note, due to potential for race conditions, if another read of this
-		// characteristic is issued and completed before this is read, the value
+		// Note, due to potential for race conditions, if another read of this is issued and completed before this is read, the value
 		// returned from the original request will have been overwritten. It is
 		// important to grab the value out of the characteristic as soon as
 		// possible on this thread.
-		val value = characteristic.value
+		val value = characteristic.value?.clone() ?: ByteArray(0)
 		defaultScope.launch {
 			processCharacteristicReadRequest(characteristic, value, status)
 		}
@@ -783,7 +846,7 @@ open class BleConnection constructor(
 		// returned from the original request will have been overwritten. It is
 		// important to grab the value out of the descriptor as soon as possible
 		// on this thread.
-		val value = descriptor.value
+		val value = descriptor.value?.clone() ?: ByteArray(0)
 		defaultScope.launch {
 			processDescriptorReadRequest(descriptor, value, status)
 		}
@@ -804,9 +867,6 @@ open class BleConnection constructor(
 		descriptor: BluetoothGattDescriptor,
 		status: Int)
 	{
-		// TODO need to handle:
-		//  1. write failure
-		//  2. still more bytes to write (!isComplete)
 		defaultScope.launch {
 			mutex.withLock {
 				lastDescriptorWriteRequest?.let {
@@ -814,7 +874,24 @@ open class BleConnection constructor(
 					Log.d(
 						"BLE_Descriptor_Write",
 						"${descriptor.uuid}: $result")
-					it.gattResponseHandler(result)
+
+					if (result != KnownGattStatusCode.SUCCESS) {
+						// Handle write failure
+						Log.w(
+							"BLE_Descriptor_Write_Failed",
+							"${descriptor.uuid}: $result")
+						if (!it.gattResponseHandler(result)) {
+							// If handler returns false, don't process next request
+							return@launch
+						}
+					} else if (!it.isComplete) {
+						// If there are more bytes to write, continue the write operation
+						it.request(gatt, descriptor)
+						return@launch
+					} else {
+						// Success and complete
+						it.gattResponseHandler(result)
+					}
 				}
 				lastDescriptorWriteRequest = null
 				processNextRequest()
@@ -943,5 +1020,37 @@ open class BleConnection constructor(
 		 */
 		const val ADJUSTED_MIN_MTU_SIZE: Int =
 			DEFAULT_GATT_MIN_MTU_SIZE - TOTAL_HEADER_BLE_SIZE
+	}
+
+	/**
+	 * The connection priority to use when requesting a change in the connection
+	 * priority using [BluetoothGatt.requestConnectionPriority].
+	 */
+	enum class ConnectionPriority(val code: Int)
+	{
+		/** Balanced connection priority. */
+		BALANCED(BluetoothGatt.CONNECTION_PRIORITY_BALANCED),
+
+		/** High connection priority. Consumes more power. */
+		HIGH(BluetoothGatt.CONNECTION_PRIORITY_HIGH),
+
+		/** Low power connection priority. Slower, consumes less power. */
+		LOW_POWER(BluetoothGatt.CONNECTION_PRIORITY_LOW_POWER)
+	}
+
+	/**
+	 * The physical layer to use when requesting a change in the physical layer
+	 * using [BluetoothGatt.setPreferredPhy].
+	 */
+	enum class PhysicalLayer(val code: Int)
+	{
+		/** Basic 1M PHY, standard BLE data rate. */
+		PHY_1M(BluetoothDevice.PHY_LE_1M),
+
+		/** 2M PHY, faster data rate introduced in Bluetooth 5.0. */
+		PHY_2M(BluetoothDevice.PHY_LE_2M),
+
+		/** Coded PHY for extended range, also from Bluetooth 5.0. */
+		PHY_CODED(BluetoothDevice.PHY_LE_CODED)
 	}
 }
