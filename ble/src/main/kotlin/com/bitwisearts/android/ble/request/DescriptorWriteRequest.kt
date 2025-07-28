@@ -26,14 +26,14 @@ import com.bitwisearts.android.ble.gatt.attribute.DescriptorId
  *   the size of this [ByteArray] exceeds the [mtu], the payload will be sent
  *   in chunks.
  * @param gattResponseHandler
- *   The lambda that accepts the [GattStatusCode] responsible for handling the
- *   response to this [DescriptorWriteRequest].
+ *   The suspend lambda that accepts the [GattStatusCode] responsible for
+ *   handling the response to this [DescriptorWriteRequest].
  */
 class DescriptorWriteRequest constructor (
 	override val identifier: DescriptorId,
 	mtu: Int,
 	payload: ByteArray,
-	gattResponseHandler: (GattStatusCode) -> Boolean
+	gattResponseHandler: suspend (GattStatusCode) -> Unit
 ): BleWriteRequest<BluetoothGattDescriptor, DescriptorId>(
 	mtu, payload, gattResponseHandler)
 {
@@ -48,8 +48,32 @@ class DescriptorWriteRequest constructor (
 		}
 		else
 		{
+			@Suppress("DEPRECATION")
 			attribute.value = next()
+			@Suppress("DEPRECATION")
 			gatt.writeDescriptor(attribute)
 		}
+	}
+
+	/**
+	 * Attempt to resend the [bytesLastSent]. Answer `true` if the payload was
+	 * resent, `false` if the maximum number of resend attempts has been
+	 * reached.
+	 */
+	@SuppressLint("MissingPermission")
+	fun resendLastPayload(
+		gatt: BluetoothGatt,
+		attribute: BluetoothGattDescriptor
+	): Boolean {
+		val bytes = resendBytes() ?: return false
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+			gatt.writeDescriptor(attribute, bytes)
+		} else {
+			@Suppress("DEPRECATION")
+			attribute.value = bytes
+			@Suppress("DEPRECATION")
+			gatt.writeDescriptor(attribute)
+		}
+		return true
 	}
 }

@@ -45,5 +45,20 @@ sealed class BleRequest<Attribute, Id: AttributeId>
 	 */
 	internal abstract val isComplete: Boolean
 
+	/**
+	 * `true` indicates the request is still active; false indicates it has been
+	 * cancelled.
+	 */
+	var isActive: Boolean = true
+		private set
+
+	/**
+	 * Cancel this [BleRequest]. This transitions the [isActive] state to `false`.
+	 */
+	fun cancel()
+	{
+		isActive = false
+	}
+
 	override fun toString(): String = "${this.javaClass.simpleName} : $identifier"
 }

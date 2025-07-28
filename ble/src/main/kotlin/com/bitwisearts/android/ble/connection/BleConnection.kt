@@ -29,8 +29,10 @@ import com.bitwisearts.android.ble.gatt.GattNoAttribute
 import com.bitwisearts.android.ble.gatt.GattNoConnection
 import com.bitwisearts.android.ble.gatt.GattStatusCode
 import com.bitwisearts.android.ble.gatt.KnownGattStatusCode
+import com.bitwisearts.android.ble.gatt.attribute.Characteristic
 import com.bitwisearts.android.ble.gatt.attribute.CharacteristicChangeNotification
 import com.bitwisearts.android.ble.gatt.attribute.CharacteristicId
+import com.bitwisearts.android.ble.gatt.attribute.Descriptor
 import com.bitwisearts.android.ble.gatt.attribute.DescriptorId
 import com.bitwisearts.android.ble.gatt.attribute.bleCharacteristicProperties
 import com.bitwisearts.android.ble.request.BleRequest
@@ -39,6 +41,8 @@ import com.bitwisearts.android.ble.request.CharacteristicWriteRequest
 import com.bitwisearts.android.ble.request.DescriptorReadRequest
 import com.bitwisearts.android.ble.request.DescriptorWriteRequest
 import com.bitwisearts.android.ble.request.EnableNotifyCharacteristicRequest
+import com.bitwisearts.android.ble.request.ReadRequestResult
+import com.bitwisearts.android.ble.request.WriteRequestResult
 import com.bitwisearts.android.ble.utility.asHex
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -51,8 +55,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.coroutines.resume
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
 import java.util.UUID
 import kotlin.math.min
 
@@ -244,7 +251,205 @@ open class BleConnection constructor(
 	}
 
 	////////////////////////////////////////////////////////////////////////////
-	//                             BLE Requests                               //
+	//                        BLE Blocking Requests                           //
+	////////////////////////////////////////////////////////////////////////////
+	/**
+	 * Read the value of the provided [characteristic] blocking until the value
+	 * has been read or the [timeoutMillis] has elapsed.
+	 *
+	 * @param characteristic
+	 *   The [Characteristic] to read the value from.
+	 * @param timeoutMillis
+	 *   The time in milliseconds to wait for the read to complete before
+	 *   timing out.
+	 * @return
+	 *   The [ReadRequestResult] that indicates the result of the read request.
+	 */
+	private suspend fun readCharacteristic(
+		characteristic: Characteristic,
+		timeoutMillis: Long = 5_000L
+	): ReadRequestResult = withTimeout(timeoutMillis)
+	{
+		suspendCancellableCoroutine { continuation ->
+			val request = CharacteristicReadRequest(
+				characteristic.characteristicId
+			) { readValue, status ->
+				if (status == KnownGattStatusCode.SUCCESS)
+				{
+					continuation.resume(
+						ReadRequestResult.ReadSuccess(
+							readValue ?: ByteArray(0))
+					)
+				}
+				else
+				{
+					continuation.resume(
+						ReadRequestResult.ReadFailure(
+							status, null
+						)
+					)
+				}
+			}
+			if (isActive)
+			{
+				ioScope.launch { submitBleRequest(request) }
+			}
+			continuation.invokeOnCancellation {
+				request.cancel()
+			}
+		}
+	}
+
+	/**
+	 * Read the value of the provided [descriptor] blocking until the value
+	 * has been read or the [timeoutMillis] has elapsed.
+	 *
+	 * @param characteristic
+	 *   The [Characteristic] the [descriptor] belongs to.
+	 * @param descriptor
+	 *   The [Characteristic] to read the value from.
+	 * @param timeoutMillis
+	 *   The time in milliseconds to wait for the read to complete before
+	 *   timing out.
+	 * @return
+	 *   The [ReadRequestResult] that indicates the result of the read request.
+	 */
+	suspend fun readDescriptor(
+		characteristic: Characteristic,
+		descriptor: Descriptor,
+		timeoutMillis: Long = 5_000L
+	): ReadRequestResult = withTimeout(timeoutMillis)
+	{
+		suspendCancellableCoroutine { continuation ->
+			val request = DescriptorReadRequest(
+				characteristic.descriptorId(descriptor)
+			) { readValue, status ->
+				if (status == KnownGattStatusCode.SUCCESS)
+				{
+					continuation.resume(
+						ReadRequestResult.ReadSuccess(
+							readValue ?: ByteArray(0))
+					)
+				}
+				else
+				{
+					continuation.resume(
+						ReadRequestResult.ReadFailure(
+							status, null
+						)
+					)
+				}
+			}
+			if (isActive)
+			{
+				ioScope.launch { submitBleRequest(request) }
+			}
+			continuation.invokeOnCancellation {
+				request.cancel()
+			}
+		}
+	}
+
+	/**
+	 * Write the provided [value] to the [characteristic] blocking until the
+	 * write has been completed or the [timeoutMillis] has elapsed.
+	 *
+	 * @param characteristic
+	 *   The [Characteristic] to write the value to.
+	 * @param value
+	 *   The [ByteArray] value to write to the [characteristic].
+	 * @param timeoutMillis
+	 *   The time in milliseconds to wait for the write to complete before
+	 *   timing out.
+	 * @return
+	 *   The [WriteRequestResult] that indicates the result of the write
+	 *   request.
+	 */
+	suspend fun writeCharacteristic(
+		characteristic: Characteristic,
+		value: ByteArray,
+		timeoutMillis: Long = 5_000L
+	): WriteRequestResult = withTimeout(timeoutMillis)
+	{
+		suspendCancellableCoroutine { continuation ->
+			val request = CharacteristicWriteRequest(
+				identifier = characteristic.characteristicId,
+				mtu = mtu,
+				payload = value
+			) { status ->
+				if (status == KnownGattStatusCode.SUCCESS)
+				{
+					continuation.resume(WriteRequestResult.WriteSuccess)
+				}
+				else
+				{
+					continuation.resume(WriteRequestResult.WriteFailure(
+						status, null))
+				}
+			}
+			if (isActive)
+			{
+				ioScope.launch { submitBleRequest(request) }
+			}
+			continuation.invokeOnCancellation {
+				request.cancel()
+			}
+		}
+	}
+
+	/**
+	 * Write the provided [value] to the [descriptor] belonging to the given
+	 * [characteristic] blocking until the write has been completed or the
+	 * [timeoutMillis] has elapsed.
+	 *
+	 * @param characteristic
+	 *   The [Characteristic] the [descriptor] belongs to.
+	 * @param descriptor
+	 *   The [Descriptor] to write the value to.
+	 * @param value
+	 *   The [ByteArray] value to write to the [descriptor].
+	 * @param timeoutMillis
+	 *   The time in milliseconds to wait for the write to complete before
+	 *   timing out.
+	 * @return
+	 *   The [WriteRequestResult] that indicates the result of the write
+	 *   request.
+	 */
+	suspend fun writeDescriptor(
+		characteristic: Characteristic,
+		descriptor: Descriptor,
+		value: ByteArray,
+		timeoutMillis: Long = 5_000L
+	): WriteRequestResult = withTimeout(timeoutMillis)
+	{
+		suspendCancellableCoroutine { continuation ->
+			val request = DescriptorWriteRequest(
+				identifier = characteristic.descriptorId(descriptor),
+				mtu = mtu,
+				payload = value
+			) { status ->
+				if (status == KnownGattStatusCode.SUCCESS)
+				{
+					continuation.resume(WriteRequestResult.WriteSuccess)
+				}
+				else
+				{
+					continuation.resume(WriteRequestResult.WriteFailure(
+						status, null))
+				}
+			}
+			if (isActive)
+			{
+				ioScope.launch { submitBleRequest(request) }
+			}
+			continuation.invokeOnCancellation {
+				request.cancel()
+			}
+		}
+	}
+
+	////////////////////////////////////////////////////////////////////////////
+	//                          BLE Async Requests                            //
 	////////////////////////////////////////////////////////////////////////////
 	/** The buffered [Channel] of [BleRequest]s for this [BleConnection]. */
 	private var bleRequestChannel = Channel<BleRequest<*, *>>(Channel.BUFFERED)
@@ -282,7 +487,7 @@ open class BleConnection constructor(
 	 *   The [connectionState] this [BleConnection] is in that caused the
 	 *   request to fail.
 	 */
-	private fun failRequestNoConnection (
+	private suspend fun failRequestNoConnection (
 		bleRequest: BleRequest<*, *>, state: ConnectionState
 	)
 	{
@@ -812,17 +1017,16 @@ open class BleConnection constructor(
 					val result = KnownGattStatusCode[status]
 					if (result != KnownGattStatusCode.SUCCESS) {
 						if(!it.resendLastPayload(gatt, characteristic)) {
-							if(it.gattResponseHandler(result)) {
-								processNextRequest()
+							defaultScope.launch {
+								it.gattResponseHandler(result)
 							}
+							processNextRequest()
 						}
 					} else {
-						if (it.isComplete)
+						if (it.processGattResponse(result, defaultScope))
 						{
 							lastCharacterWriteRequest = null
-							if(it.gattResponseHandler(result)) {
-								processNextRequest()
-							}
+							processNextRequest()
 						}
 						else
 						{
@@ -830,7 +1034,6 @@ open class BleConnection constructor(
 						}
 					}
 				}
-
 			}
 		}
 	}
@@ -880,21 +1083,23 @@ open class BleConnection constructor(
 						Log.w(
 							"BLE_Descriptor_Write_Failed",
 							"${descriptor.uuid}: $result")
-						if (!it.gattResponseHandler(result)) {
-							// If handler returns false, don't process next request
-							return@launch
+						if(!it.resendLastPayload(gatt, descriptor)) {
+							defaultScope.launch {
+								it.gattResponseHandler(result)
+							}
+							processNextRequest()
 						}
-					} else if (!it.isComplete) {
-						// If there are more bytes to write, continue the write operation
+					}
+					if (it.processGattResponse(result, defaultScope))
+					{
+						lastDescriptorWriteRequest = null
+						processNextRequest()
+					}
+					else
+					{
 						it.request(gatt, descriptor)
-						return@launch
-					} else {
-						// Success and complete
-						it.gattResponseHandler(result)
 					}
 				}
-				lastDescriptorWriteRequest = null
-				processNextRequest()
 			}
 		}
 	}

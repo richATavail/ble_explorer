@@ -14,7 +14,7 @@ import com.bitwisearts.android.ble.gatt.attribute.AttributeId
  *   The type of [AttributeId] used to uniquely identify the target [Attribute]
  *   for this [BleRequest].
  */
-sealed class BLEReadRequest<Attribute, Id: AttributeId>:
+sealed class BleReadRequest<Attribute, Id: AttributeId>:
 	BleRequest<Attribute, Id>()
 {
 	/**
@@ -24,17 +24,22 @@ sealed class BLEReadRequest<Attribute, Id: AttributeId>:
 	 */
 	protected abstract val resultHandler: (ByteArray?, GattStatusCode) -> Unit
 
-	override var isComplete: Boolean = false
+	override val isComplete: Boolean get() = completed
+
+	private var completed = false
 
 	/**
-	 * Complete this [BLEReadRequest].
+	 * Complete this [BleReadRequest].
 	 *
 	 * @param readValue
 	 *   The [value][ByteArray] read from the attribute or `null` if read fails.
 	 */
 	fun complete (readValue: ByteArray?, statusCode: GattStatusCode)
 	{
-		isComplete = true
-		resultHandler(readValue, statusCode)
+		if (isActive)
+		{
+			completed = true
+			resultHandler(readValue, statusCode)
+		}
 	}
 }

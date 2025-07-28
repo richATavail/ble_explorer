@@ -41,23 +41,28 @@ import com.bitwisearts.android.ble.gatt.attribute.CharacteristicId
  *   * [BluetoothGattCharacteristic.WRITE_TYPE_SIGNED]
  *   * [BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE]
  * @param gattResponseHandler
- *   The lambda that accepts the [GattStatusCode] responsible for handling the
- *   response to this [CharacteristicWriteRequest].
+ *   The suspend lambda that accepts the [GattStatusCode] responsible for
+ *   handling the response to this [CharacteristicWriteRequest].
  */
 class CharacteristicWriteRequest constructor (
 	override val identifier: CharacteristicId,
 	mtu: Int,
 	payload: ByteArray,
 	val writeType: Int = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT,
-	gattResponseHandler: (GattStatusCode) -> Boolean
+	gattResponseHandler: suspend (GattStatusCode) -> Unit
 ): BleWriteRequest<BluetoothGattCharacteristic, CharacteristicId>(
 	mtu, payload, gattResponseHandler)
 {
+	private lateinit var gatt: BluetoothGatt
+	private lateinit var attribute: BluetoothGattCharacteristic
+
 	@SuppressLint("MissingPermission")
 	override fun request(
 		gatt: BluetoothGatt,
-		attribute: BluetoothGattCharacteristic)
-	{
+		attribute: BluetoothGattCharacteristic
+	) {
+		this.gatt = gatt
+		this.attribute = attribute
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
 		{
 			gatt.writeCharacteristic(
@@ -67,7 +72,9 @@ class CharacteristicWriteRequest constructor (
 		}
 		else
 		{
+			@Suppress("DEPRECATION")
 			attribute.value = next()
+			@Suppress("DEPRECATION")
 			gatt.writeCharacteristic(attribute)
 		}
 	}
@@ -90,7 +97,9 @@ class CharacteristicWriteRequest constructor (
 				writeType
 			)
 		} else {
+			@Suppress("DEPRECATION")
 			attribute.value = bytes
+			@Suppress("DEPRECATION")
 			gatt.writeCharacteristic(attribute)
 		}
 		return true

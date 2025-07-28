@@ -7,14 +7,14 @@ import com.bitwisearts.android.ble.gatt.GattStatusCode
 import com.bitwisearts.android.ble.gatt.attribute.CharacteristicId
 
 /**
- * [BLEReadRequest] used to read a value from a [BluetoothGattCharacteristic].
+ * [BleReadRequest] used to read a value from a [BluetoothGattCharacteristic].
  *
  * @author Richard Arriaga
  */
 class CharacteristicReadRequest constructor(
 	override val identifier: CharacteristicId,
 	override val resultHandler: (ByteArray?, GattStatusCode) -> Unit
-): BLEReadRequest<BluetoothGattCharacteristic, CharacteristicId>()
+): BleReadRequest<BluetoothGattCharacteristic, CharacteristicId>()
 {
 	@SuppressLint("MissingPermission")
 	override fun request(

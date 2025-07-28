@@ -25,5 +25,16 @@ abstract class Characteristic constructor(
 	val characteristicId: CharacteristicId by lazy {
 		CharacteristicId(service.uuid, uuid) }
 
+	/**
+	 * Answer a [DescriptorId] that uniquely identifies the provided
+	 * [Descriptor] for this [Characteristic].
+	 */
+	fun descriptorId(descriptor: Descriptor): DescriptorId =
+		DescriptorId(
+			serviceId = characteristicId.serviceId,
+			characteristicId = characteristicId.characteristicId,
+			descriptorId = descriptor.uuid
+		)
+
 	override fun toString(): String = "name ($uuid)"
 }

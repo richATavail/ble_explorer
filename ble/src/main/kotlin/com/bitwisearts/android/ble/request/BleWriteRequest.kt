@@ -1,9 +1,10 @@
 package com.bitwisearts.android.ble.request
 
-
 import com.bitwisearts.android.ble.connection.BleConnection
 import com.bitwisearts.android.ble.gatt.GattStatusCode
 import com.bitwisearts.android.ble.gatt.attribute.AttributeId
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * An abstract [BleRequest] used to chunk BLE write requests to a BLE GATT
@@ -23,14 +24,13 @@ import com.bitwisearts.android.ble.gatt.attribute.AttributeId
  *   the size of this [ByteArray] exceeds the [mtu], the payload will be sent
  *   in chunks.
  * @property gattResponseHandler
- *   The lambda that accepts the [GattStatusCode] responsible for handling the
- *   response to this [BleWriteRequest]. Answer `true` if the next request
- *   should be processed; `false` otherwise.
+ *   The suspend lambda that accepts the [GattStatusCode] responsible for
+ *   handling the response to this [BleWriteRequest].
  */
 sealed class BleWriteRequest<Attribute, Id: AttributeId> constructor (
 	private val mtu: Int,
 	private val payload: ByteArray,
-	val gattResponseHandler: (GattStatusCode) -> Boolean
+	val gattResponseHandler: suspend (GattStatusCode) -> Unit
 ) : BleRequest<Attribute, Id>(), Iterator<ByteArray>
 {
 	/**
@@ -84,5 +84,35 @@ sealed class BleWriteRequest<Attribute, Id: AttributeId> constructor (
 		bytesLastSent = bytesToSend
 		resendAttempts = 0
 		return bytesToSend
+	}
+
+	/**
+	 * Process the GATT response to this [BleWriteRequest]. If there is more
+	 * data to send, this will not invoke the [gattResponseHandler] but instead
+	 * will resume sending the next chunk of data.
+	 *
+	 * @param gattStatusCode
+	 *   The [GattStatusCode] that represents the status of the GATT response.
+	 * @param scope
+	 *   The [CoroutineScope] used to launch the coroutine that will
+	 *   handle the GATT response.
+	 * @return `true` if the next request should be processed; `false` otherwise.
+	 */
+	fun processGattResponse(
+		gattStatusCode: GattStatusCode,
+		scope: CoroutineScope
+	): Boolean
+	{
+		// This request has been cancelled, so do not process the response and
+		// move on to the next request.
+		if (!isActive) return true
+		if(isComplete)
+		{
+			scope.launch {
+				gattResponseHandler(gattStatusCode)
+			}
+			return true
+		}
+		return false
 	}
 }
