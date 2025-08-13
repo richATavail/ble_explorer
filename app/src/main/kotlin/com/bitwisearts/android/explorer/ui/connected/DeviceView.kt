@@ -79,10 +79,10 @@ fun DeviceView (
 	}
 	// TODO do something if bluetooth is turned off...
 	val bluetoothEnabled by
-		viewModel.bluetoothEnabled.collectAsStateWithLifecycle()
+	viewModel.bluetoothEnabled.collectAsStateWithLifecycle()
 	val connectionState by viewModel.connectionState.collectAsStateWithLifecycle()
 	val advertisement: Advertisement? by
-		remember { mutableStateOf(viewModel.selectedAdvertisement)}
+	remember { mutableStateOf(viewModel.selectedAdvertisement)}
 	Column(
 		modifier = Modifier.padding(10.dp).verticalScroll(rememberScrollState()))
 	{
@@ -97,15 +97,15 @@ fun DeviceView (
 				it.advertisementData)
 			Text(text = connectionState.label)
 			Button(onClick =
-			{
-				if(connectionState == BleConnectionState.CONNECTED)
 				{
-					viewModel.disconnect()
-					return@Button
-				} else {
-					viewModel.connect()
-				}
-			}) {
+					if(connectionState == BleConnectionState.CONNECTED)
+					{
+						viewModel.disconnect()
+						return@Button
+					} else {
+						viewModel.connect()
+					}
+				}) {
 				val buttonTextId =
 					if (connectionState == BleConnectionState.CONNECTED) {
 						R.string.disconnect
@@ -143,15 +143,17 @@ fun CharacteristicView(
 	properties: Set<BleCharacteristicProperty>,
 	permissions: Set<AttributePermission>)
 {
-	Column(modifier = Modifier.padding(9.dp))
+	Column(modifier = Modifier.padding(vertical = 9.dp, horizontal = 12.dp))
 	{
-		Row(Modifier.fillMaxWidth().padding(bottom = 7.dp))
+		Row(Modifier.fillMaxWidth().padding(bottom = 3.dp))
 		{
 			Text(
 				text = charName,
-				modifier = Modifier.padding(end = 5.dp),
 				fontWeight = FontWeight.Bold
 			)
+		}
+		Row(Modifier.fillMaxWidth().padding(bottom = 7.dp))
+		{
 			SelectionContainer {
 				Text(text = uuid.toString())
 			}
@@ -192,20 +194,27 @@ fun ServiceView(service: BluetoothGattService)
 	// TODO totally can do this better!
 	val unrecognized = stringResource(id = R.string.unrecognized)
 	val s = CommonService[service.uuid] ?:
-		UnrecognizedService(
-			service.uuid,
-			"$unrecognized ${stringResource(id = R.string.service)}",
-			service.characteristics)
+	UnrecognizedService(
+		service.uuid,
+		"$unrecognized ${stringResource(id = R.string.service)}",
+		service.characteristics)
 	Column(modifier = Modifier.padding(9.dp))
 	{
-		Row(Modifier.fillMaxWidth().padding(bottom = 7.dp))
+		Row(Modifier.fillMaxWidth().padding(bottom = 4.dp))
 		{
 			Text(
 				text = s.name,
+				fontSize = 18.sp,
 				modifier = Modifier.padding(end = 6.dp),
 				fontWeight = FontWeight.Bold)
+		}
+		Row(Modifier.fillMaxWidth().padding(bottom = 7.dp))
+		{
 			SelectionContainer {
-				Text(text = s.uuid.toString())
+				Text(
+					fontSize = 18.sp,
+					text = s.uuid.toString()
+				)
 			}
 		}
 		s.characteristics.forEach {
@@ -213,13 +222,13 @@ fun ServiceView(service: BluetoothGattService)
 			{
 				service.getCharacteristic(it.uuid)?.let { bgc ->
 					val knownName = CommonCharacteristic[it.uuid]?.name ?:
-						"$unrecognized ${stringResource(id = R.string.characteristic)}"
+					"$unrecognized ${stringResource(id = R.string.characteristic)}"
 					CharacteristicView(
 						uuid = bgc.uuid,
 						charName = knownName,
 						properties = bgc.bleCharacteristicProperties,
 						permissions = bgc.attributePermissions)
-					}
+				}
 			}
 		}
 	}
