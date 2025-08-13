@@ -138,26 +138,6 @@ open class BleConnection constructor(
 	var gatt: BluetoothGatt? = null
 
 	/**
-	 * Disconnect the BLE connection to the [device]. This will retain the 
-	 * [gatt] and reuse it to reconnect to the [device] if a reconnect request
-	 * is made.
-	 */
-	@SuppressLint("MissingPermission")
-	fun disconnect()
-	{
-		ioScope.launch(Dispatchers.IO) {
-			mutex.withLock {
-				if (!(_connectionState.value).isConnected)
-				{
-					return@launch
-				}
-				_connectionState.value = DISCONNECT_REQUESTED
-				gatt?.disconnect()
-			}
-		}
-	}
-
-	/**
 	 * Fully close the [gatt] connection; this makes the [gatt] no longer 
 	 * usable.
 	 */
@@ -165,17 +145,18 @@ open class BleConnection constructor(
 	{
 		ioScope.launch {
 			mutex.withLock {
-				_connectionState.value = DISCONNECT_REQUESTED
 				if (!(_connectionState.value).isConnected)
 				{
 					return@launch
 				}
+				_connectionState.value = DISCONNECT_REQUESTED
 				gatt?.apply {
 					disconnect()
 					close()
 					handlerThread?.quitSafely()
 					handlerThread = null
 				}
+				gatt = null
 			}
 		}
 	}

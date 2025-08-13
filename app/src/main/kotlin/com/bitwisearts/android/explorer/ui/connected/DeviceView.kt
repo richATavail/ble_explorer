@@ -34,6 +34,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bitwisearts.android.ble.BleDevice
 import com.bitwisearts.android.ble.advertisement.Advertisement
 import com.bitwisearts.android.ble.connection.BleConnection
+import com.bitwisearts.android.ble.connection.BleConnectionState
 import com.bitwisearts.android.ble.connection.BleDeviceManager
 import com.bitwisearts.android.ble.connection.ConnectionState
 import com.bitwisearts.android.ble.gatt.attribute.AttributePermission
@@ -97,9 +98,21 @@ fun DeviceView (
 			Text(text = connectionState.label)
 			Button(onClick =
 			{
-				viewModel.connect()
+				if(connectionState == BleConnectionState.CONNECTED)
+				{
+					viewModel.disconnect()
+					return@Button
+				} else {
+					viewModel.connect()
+				}
 			}) {
-				Text(text = stringResource(id = R.string.connect))
+				val buttonTextId =
+					if (connectionState == BleConnectionState.CONNECTED) {
+						R.string.disconnect
+					} else {
+						R.string.connect
+					}
+				Text(text = stringResource(id = buttonTextId))
 			}
 		}?: Text(text = "Still gotta build this!!! Show $macAddress")
 		val services = viewModel.services.collectAsStateWithLifecycle().value
@@ -277,6 +290,17 @@ class DeviceViewModel: ViewModel()
 					"~~~~ Device Failed to Connect ~~~~")
 
 			}
+		}
+	}
+
+	/**
+	 * Disconnect [disconnect][BleConnection.disconnect] from the [device].
+	 * This should allow for future reconnections to the device.
+	 */
+	fun disconnect ()
+	{
+		viewModelScope.launch {
+			connection.fullyCloseConnection()
 		}
 	}
 
