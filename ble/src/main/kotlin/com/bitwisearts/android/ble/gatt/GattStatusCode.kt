@@ -18,3 +18,14 @@ sealed interface GattStatusCode
 	 */
 	val display: String get() = "(0x${code.toString(16)}) $name"
 }
+
+/**
+ * The custom [GattStatusCode] for triggering a manual timeout for BLE GATT
+ * operations set by the user, not by the Android SDK. This should only be used
+ * when a custom timeout occurs.
+ */
+data object ManualTimeoutGattStatusCode : GattStatusCode
+{
+	override val code: Int = -1
+	override val name: String = "Manual Non-Standard Timeout"
+}

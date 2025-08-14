@@ -1,6 +1,7 @@
 package com.bitwisearts.android.ble.gatt.attribute
 
 import android.bluetooth.BluetoothGattCharacteristic
+import com.bitwisearts.android.ble.utility.asLiteralHex
 import java.util.UUID
 
 /**
@@ -37,4 +38,18 @@ abstract class Characteristic constructor(
 		)
 
 	override fun toString(): String = "name ($uuid)"
+
+	/**
+	 * Convert the given [ByteArray] value of this [Characteristic] into a
+	 * human readable [String]. If the [Characteristic] has no special way to
+	 * represent its value, the default implementation returns the value as a
+	 * literal hex [String] (eg. 0x01AF).
+	 * @param value
+	 *   The [ByteArray] value to stringify.
+	 * @return
+	 *   A human readable [String] representation of the given
+	 *   [ByteArray] value.
+	 */
+	open fun stringifyValue (value: ByteArray): String =
+		value.asLiteralHex
 }

@@ -33,6 +33,9 @@ import com.bitwisearts.android.ble.gatt.attribute.CharacteristicId
  *   The entire [ByteArray] payload to write to the target GATT Attribute. If
  *   the size of this [ByteArray] exceeds the [mtu], the payload will be sent
  *   in chunks.
+ * @param maxResendAttempts
+ *   The maximum number of resend attempts for this write request. Each chunk
+ *   sent resets the resend attempt counter to zero.
  * @param writeType
  *   This is used for [API 33][Build.VERSION_CODES.TIRAMISU] and higher in
  *   [BluetoothGatt.writeCharacteristic]. The [BluetoothGattCharacteristic]
@@ -48,10 +51,11 @@ class CharacteristicWriteRequest constructor (
 	override val identifier: CharacteristicId,
 	mtu: Int,
 	payload: ByteArray,
+	maxResendAttempts: Int = MAX_RESEND_ATTEMPTS,
 	val writeType: Int = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT,
 	gattResponseHandler: suspend (GattStatusCode) -> Unit
 ): BleWriteRequest<BluetoothGattCharacteristic, CharacteristicId>(
-	mtu, payload, gattResponseHandler)
+	mtu, payload, maxResendAttempts, gattResponseHandler)
 {
 	private lateinit var gatt: BluetoothGatt
 	private lateinit var attribute: BluetoothGattCharacteristic

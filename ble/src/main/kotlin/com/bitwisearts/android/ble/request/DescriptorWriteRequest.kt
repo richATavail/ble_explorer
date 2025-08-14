@@ -25,6 +25,9 @@ import com.bitwisearts.android.ble.gatt.attribute.DescriptorId
  *   The entire [ByteArray] payload to write to the target GATT Attribute. If
  *   the size of this [ByteArray] exceeds the [mtu], the payload will be sent
  *   in chunks.
+ * @param maxResendAttempts
+ *   The maximum number of resend attempts for this write request. Each chunk
+ *   sent resets the resend attempt counter to zero.
  * @param gattResponseHandler
  *   The suspend lambda that accepts the [GattStatusCode] responsible for
  *   handling the response to this [DescriptorWriteRequest].
@@ -33,9 +36,10 @@ class DescriptorWriteRequest constructor (
 	override val identifier: DescriptorId,
 	mtu: Int,
 	payload: ByteArray,
+	maxResendAttempts: Int = MAX_RESEND_ATTEMPTS,
 	gattResponseHandler: suspend (GattStatusCode) -> Unit
 ): BleWriteRequest<BluetoothGattDescriptor, DescriptorId>(
-	mtu, payload, gattResponseHandler)
+	mtu, payload, maxResendAttempts, gattResponseHandler)
 {
 	@SuppressLint("MissingPermission")
 	override fun request(

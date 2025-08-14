@@ -12,6 +12,14 @@ import com.bitwisearts.android.ble.gatt.attribute.AttributeId
  * This represents a common hierarchy for both requests targeting both
  * [BluetoothGattCharacteristic] and [BluetoothGattDescriptor].
  *
+ * **NOTE** The Android SDK does not provide a way to cancel an in-flight GATT
+ * request and will only process one request at a time per connection. It
+ * maintains an internal timeout for requests that do not complete in a timely
+ * fashion that is not configurable. Therefore, cancelling a [BleRequest] only
+ * marks it as inactive so that when/if the request does complete, its results
+ * are ignored. No other request will be able to be made on the same
+ * [BleConnection] until the in-flight request completes or times out.
+ *
  * @author Richard Arriaga
  *
  * @param Attribute
@@ -54,6 +62,13 @@ sealed class BleRequest<Attribute, Id: AttributeId>
 
 	/**
 	 * Cancel this [BleRequest]. This transitions the [isActive] state to `false`.
+	 *
+	 * **NOTE** This does not actually cancel the underlying GATT request as
+	 * Android does not provide a way to do so. It simply marks this request as
+	 * inactive so that when/if the request does complete, its results are
+	 * ignored. The request will still complete or timeout as per Android's
+	 * internal handling. No other request will be able to be made on the same
+	 * [BleConnection] until the in-flight request completes or times out.
 	 */
 	fun cancel()
 	{

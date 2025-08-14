@@ -3,6 +3,7 @@ package com.bitwisearts.android.ble.request
 import com.bitwisearts.android.ble.BleDevice
 import com.bitwisearts.android.ble.connection.BleConnection
 import com.bitwisearts.android.ble.gatt.GattStatusCode
+import com.bitwisearts.android.ble.utility.asLiteralHex
 
 /**
  * A result of a [BleReadRequest] made to a [BleDevice] over a [BleConnection].
@@ -17,7 +18,9 @@ sealed interface ReadRequestResult
 	 * @param data
 	 *   The [ByteArray] data returned from the request.
 	 */
-	class ReadSuccess(val data: ByteArray): ReadRequestResult
+	class ReadSuccess(val data: ByteArray): ReadRequestResult {
+		override fun toString(): String = data.asLiteralHex
+	}
 
 	/**
 	 * A [ReadRequestResult] that indicates the [BleReadRequest] failed.
@@ -31,7 +34,10 @@ sealed interface ReadRequestResult
 	class ReadFailure(
 		val gattStatusCode: GattStatusCode,
 		val error: Throwable?
-	): ReadRequestResult
+	): ReadRequestResult {
+		override fun toString(): String = gattStatusCode.display +
+			(error?.let { "\n${it.message}" } ?: "")
+	}
 }
 
 /**

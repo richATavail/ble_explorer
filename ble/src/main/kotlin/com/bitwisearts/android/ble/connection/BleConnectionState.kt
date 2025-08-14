@@ -96,10 +96,26 @@ enum class BleConnectionState (
 		override val label: String get() = "Connection Failed"
 	},
 
+	/** The connection attempt has failed due to a timeout. */
+	CONNECTION_TIMEOUT(false, Int.MIN_VALUE + 3)
+	{
+		override val label: String get() = "Connection Attempt Timed Out"
+	},
+
 	/** A disconnect has been requested. */
-	DISCONNECT_REQUESTED(false, Int.MIN_VALUE + 3)
+	DISCONNECT_REQUESTED(false, Int.MIN_VALUE + 4)
 	{
 		override val label: String get() = "Disconnect Requested"
+	},
+
+	/**
+	 * Notifications or indications are being set up on one or more
+	 * characteristics. Technically the device is connected but not fully ready
+	 * for use as notifications/indications are not yet enabled.
+	 */
+	NOTIFICATION_SETUP(false, Int.MIN_VALUE + 5)
+	{
+		override val label: String get() = "Notification Setup"
 	};
 
 	companion object

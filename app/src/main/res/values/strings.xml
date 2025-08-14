@@ -13,6 +13,7 @@
 	<string name="ble_devices">BLE Devices</string>
 	<string name="scan">Scan</string>
 	<string name="rssi">RSSI</string>
+	<string name="read">Read</string>
 	<string name="tx_power">TX Power</string>
 	<string name="ok">OK</string>
 	<string name="go_to_settings">Go to settings</string>

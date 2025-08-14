@@ -4,13 +4,19 @@ import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattService
 import android.util.Log
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -18,6 +24,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
@@ -39,17 +47,19 @@ import com.bitwisearts.android.ble.connection.BleDeviceManager
 import com.bitwisearts.android.ble.connection.ConnectionState
 import com.bitwisearts.android.ble.gatt.attribute.AttributePermission
 import com.bitwisearts.android.ble.gatt.attribute.BleCharacteristicProperty
+import com.bitwisearts.android.ble.gatt.attribute.Characteristic
 import com.bitwisearts.android.ble.gatt.attribute.UnrecognizedService
 import com.bitwisearts.android.ble.gatt.attribute.attributePermissions
 import com.bitwisearts.android.ble.gatt.attribute.bleCharacteristicProperties
 import com.bitwisearts.android.ble.gatt.attribute.common.CommonCharacteristic
 import com.bitwisearts.android.ble.gatt.attribute.common.CommonService
+import com.bitwisearts.android.ble.request.ReadRequestResult
 import com.bitwisearts.android.explorer.ExplorerApp
 import com.bitwisearts.android.explorer.R
 import com.bitwisearts.android.explorer.ui.components.AdvertisementExpanded
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import java.util.UUID
 
 /**
  * The primary [Composable] view showing a particular device for the given Mac
@@ -115,10 +125,98 @@ fun DeviceView (
 				Text(text = stringResource(id = buttonTextId))
 			}
 		}?: Text(text = "Still gotta build this!!! Show $macAddress")
-		val services = viewModel.services.collectAsStateWithLifecycle().value
-		services.forEach { (k, v) ->
-			Log.d("DeviceView", "Adding Service $k")
-			ServiceView(v)
+		val services by viewModel.services.collectAsStateWithLifecycle()
+		val servicesExpanded = remember { mutableStateOf(false) }
+		DisposableEffect(connectionState) {
+			servicesExpanded.value =
+				connectionState == BleConnectionState.CONNECTED
+			onDispose { }
+		}
+		Column {
+			Row(
+				modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+				verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+			) {
+				Text(
+					text = "Services",
+					fontWeight = FontWeight.Bold,
+					fontSize = 18.sp,
+					modifier = Modifier.weight(1f)
+				)
+				IconButton(
+					onClick = { servicesExpanded.value = !servicesExpanded.value }
+				) {
+					Icon(
+						imageVector = if (servicesExpanded.value)
+							Icons.Default.KeyboardArrowUp
+						else
+							Icons.Default.KeyboardArrowDown,
+						contentDescription =
+							if (servicesExpanded.value) "Collapse" else "Expand"
+					)
+				}
+			}
+
+			if (servicesExpanded.value) {
+				services.forEach { (k, v) ->
+					Log.d("DeviceView", "Adding Service $k")
+					ServiceView(v, viewModel.connection)
+				}
+			}
+		}
+	}
+}
+
+/**
+ * A view of the provided [BluetoothGattService].
+ */
+@Composable
+fun ServiceView(
+	service: BluetoothGattService,
+	bleConnection: BleConnection
+) {
+	// TODO totally can do this better!
+	val unrecognized = stringResource(id = R.string.unrecognized)
+	val s = CommonService[service.uuid] ?:
+		UnrecognizedService(
+			service.uuid,
+			"$unrecognized ${stringResource(id = R.string.service)}",
+			service.characteristics
+		)
+	Column(modifier = Modifier.padding(9.dp))
+	{
+		Row(Modifier.fillMaxWidth().padding(bottom = 4.dp))
+		{
+			Text(
+				text = s.name,
+				fontSize = 18.sp,
+				modifier = Modifier.padding(end = 6.dp),
+				fontWeight = FontWeight.Bold)
+		}
+		Row(Modifier.fillMaxWidth().padding(bottom = 7.dp))
+		{
+			SelectionContainer {
+				Text(
+					fontSize = 18.sp,
+					text = s.uuid.toString()
+				)
+			}
+		}
+		s.characteristics.forEach {
+			Row(Modifier.fillMaxWidth().padding(start = 1.dp))
+			{
+				service.getCharacteristic(it.uuid)?.let { bgc ->
+					val knownName = CommonCharacteristic[it.uuid]?.name ?:
+						"$unrecognized ${stringResource(id = R.string.characteristic)}"
+					CharacteristicView(
+						characteristic = it,
+						charName = knownName,
+						properties = bgc.bleCharacteristicProperties,
+						permissions = bgc.attributePermissions,
+						bleConnection = bleConnection
+					)
+				}
+			}
 		}
 	}
 }
@@ -126,8 +224,8 @@ fun DeviceView (
 /**
  * A view of a [BluetoothGattCharacteristic].
  *
- * @param uuid
- *   The [BluetoothGattCharacteristic.getUuid].
+ * @param characteristic
+ *   The [Characteristic] to view.
  * @param charName
  *   A String name applied of the characteristic.
  * @param properties
@@ -135,14 +233,17 @@ fun DeviceView (
  *   [BluetoothGattCharacteristic].
  * @param permissions
  *   The set of [AttributePermission]s of the [BluetoothGattCharacteristic].
+ * @param bleConnection
+ *   The [BleConnection] to use for any operations on the characteristic.
  */
 @Composable
 fun CharacteristicView(
-	uuid: UUID,
+	characteristic: Characteristic,
 	charName: String,
 	properties: Set<BleCharacteristicProperty>,
-	permissions: Set<AttributePermission>)
-{
+	permissions: Set<AttributePermission>,
+	bleConnection: BleConnection
+) {
 	Column(modifier = Modifier.padding(vertical = 9.dp, horizontal = 12.dp))
 	{
 		Row(Modifier.fillMaxWidth().padding(bottom = 3.dp))
@@ -155,7 +256,7 @@ fun CharacteristicView(
 		Row(Modifier.fillMaxWidth().padding(bottom = 7.dp))
 		{
 			SelectionContainer {
-				Text(text = uuid.toString())
+				Text(text = characteristic.uuid.toString())
 			}
 		}
 		Row(Modifier.fillMaxWidth().padding(bottom = 7.dp))
@@ -182,54 +283,56 @@ fun CharacteristicView(
 				fontStyle = FontStyle.Italic,
 				fontSize = 10.sp)
 		}
+		if(properties.contains(BleCharacteristicProperty.READ))
+		{
+			ReadCharacteristicView(
+				characteristic = characteristic,
+				bleConnection = bleConnection
+			)
+		}
 	}
 }
 
 /**
- * A view of the provided [BluetoothGattService].
+ * A view that allows reading from the given [Characteristic].
+ *
+ * @param characteristic
+ *   The [Characteristic] to read from.
+ * @param bleConnection
+ *   The [BleConnection] to use to read the characteristic.
  */
 @Composable
-fun ServiceView(service: BluetoothGattService)
+fun ColumnScope.ReadCharacteristicView(
+	characteristic: Characteristic,
+	bleConnection: BleConnection)
 {
-	// TODO totally can do this better!
-	val unrecognized = stringResource(id = R.string.unrecognized)
-	val s = CommonService[service.uuid] ?:
-	UnrecognizedService(
-		service.uuid,
-		"$unrecognized ${stringResource(id = R.string.service)}",
-		service.characteristics)
-	Column(modifier = Modifier.padding(9.dp))
-	{
-		Row(Modifier.fillMaxWidth().padding(bottom = 4.dp))
-		{
-			Text(
-				text = s.name,
-				fontSize = 18.sp,
-				modifier = Modifier.padding(end = 6.dp),
-				fontWeight = FontWeight.Bold)
-		}
-		Row(Modifier.fillMaxWidth().padding(bottom = 7.dp))
-		{
-			SelectionContainer {
-				Text(
-					fontSize = 18.sp,
-					text = s.uuid.toString()
-				)
-			}
-		}
-		s.characteristics.forEach {
-			Row(Modifier.fillMaxWidth().padding(start = 1.dp))
-			{
-				service.getCharacteristic(it.uuid)?.let { bgc ->
-					val knownName = CommonCharacteristic[it.uuid]?.name ?:
-					"$unrecognized ${stringResource(id = R.string.characteristic)}"
-					CharacteristicView(
-						uuid = bgc.uuid,
-						charName = knownName,
-						properties = bgc.bleCharacteristicProperties,
-						permissions = bgc.attributePermissions)
+	val connectionState by bleConnection.connectionState
+		.collectAsStateWithLifecycle()
+	var readResult: ReadRequestResult? by remember {
+		mutableStateOf(null)
+	}
+	val scope = rememberCoroutineScope()
+	Row(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+		Button(
+			enabled = connectionState == BleConnectionState.CONNECTED,
+			onClick = {
+				scope.launch(Dispatchers.IO) {
+					readResult = bleConnection.readCharacteristic(characteristic)
 				}
-			}
+		}) {
+			Text(text = stringResource(id = R.string.read))
+		}
+	}
+	readResult?.let { result ->
+		Row(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+			val lastReadValue =
+				when(result) {
+					is ReadRequestResult.ReadFailure ->
+						result.toString()
+					is ReadRequestResult.ReadSuccess ->
+						characteristic.stringifyValue(result.data)
+				}
+			Text(text = lastReadValue)
 		}
 	}
 }
@@ -315,6 +418,7 @@ class DeviceViewModel: ViewModel()
 
 	override fun onCleared()
 	{
+		connection.fullyCloseConnection()
 		Log.w(
 			"DeviceViewModel",
 			"+++++++++ Has Been Cleared!! ++++++++")

@@ -32,6 +32,8 @@ standardUUID(0x2A00), "Device Name")
 {
 	override val service: Service get() = GenericAccessService
 	override val descriptors: Set<Descriptor> = setOf()
+	override fun stringifyValue(value: ByteArray): String =
+		String(value, Charsets.UTF_8)
 }
 
 /**

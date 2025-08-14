@@ -8,27 +8,25 @@ import com.bitwisearts.android.ble.utility.asInt
 
 /**
  * The [CommonService] that exposes the
- * [Battery Service 1.0](https://www.bluetooth.com/specifications/specs/battery-service-1-0/)
+ * [Heart Rate Service 1.0](https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/HRS_v1.0/out/en/index-en.html#)
  * for batteries in a device.
  *
  * @author Richard Arriaga
  */
-object Battery: CommonService(standardUUID(0x180F), "Battery Service")
+object HeartRateService: CommonService(standardUUID(0x180D), "Heart Rate Service")
 {
-	override val characteristics: Set<Characteristic> = setOf(BatteryLevel)
+	override val characteristics: Set<Characteristic> = setOf(HeartRateMeasurement)
 }
 
 /**
- * `BatteryLevel` returns the current battery level as a percentage from 0% to
- * 100%; 0% represents a battery that is fully discharged, 100% represents a
- * battery that is fully charged.
+ * Contains the heart rate measurement from a heart rate sensor.
  *
  * @author Richard Arriaga
  */
-object BatteryLevel: CommonCharacteristic(
-	standardUUID(0x2A19), "Battery Level")
+object HeartRateMeasurement: CommonCharacteristic(
+	standardUUID(0x2A37), "Heart Rate Measurement")
 {
-	override val service: Service get() = Battery
+	override val service: Service get() = HeartRateService
 	override val descriptors: Set<Descriptor> = setOf()
 	override fun stringifyValue(value: ByteArray): String =
 		value.asInt.toString()

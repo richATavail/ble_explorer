@@ -23,6 +23,9 @@ import kotlinx.coroutines.launch
  *   The entire [ByteArray] payload to write to the target GATT Attribute. If
  *   the size of this [ByteArray] exceeds the [mtu], the payload will be sent
  *   in chunks.
+ * @property maxResendAttempts
+ *   The maximum number of resend attempts for this write request. Each chunk
+ *   sent resets the resend attempt counter to zero.
  * @property gattResponseHandler
  *   The suspend lambda that accepts the [GattStatusCode] responsible for
  *   handling the response to this [BleWriteRequest].
@@ -30,6 +33,7 @@ import kotlinx.coroutines.launch
 sealed class BleWriteRequest<Attribute, Id: AttributeId> constructor (
 	private val mtu: Int,
 	private val payload: ByteArray,
+	private val maxResendAttempts: Int = MAX_RESEND_ATTEMPTS,
 	val gattResponseHandler: suspend (GattStatusCode) -> Unit
 ) : BleRequest<Attribute, Id>(), Iterator<ByteArray>
 {
@@ -60,7 +64,7 @@ sealed class BleWriteRequest<Attribute, Id: AttributeId> constructor (
 	 * otherwise answer `null` to indicate that no more attempts should be made.
 	 */
 	fun resendBytes(): ByteArray? =
-		if(++resendAttempts < 3) bytesLastSent else null
+		if(++resendAttempts < maxResendAttempts) bytesLastSent else null
 
 	override fun next(): ByteArray
 	{
@@ -114,5 +118,10 @@ sealed class BleWriteRequest<Attribute, Id: AttributeId> constructor (
 			return true
 		}
 		return false
+	}
+
+	companion object {
+		/** The maximum number of resend attempts for a write request. */
+		protected const val MAX_RESEND_ATTEMPTS: Int = 3
 	}
 }

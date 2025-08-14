@@ -50,3 +50,21 @@ val ByteArray.asBinary: String get() =
 @Suppress("unused")
 val ByteArray.asLiteralHex: String get() =
 	this.map { it.asLiteralHex }.joinToString(" ") { it }
+
+/**
+ * @return
+ *   This [ByteArray] interpreted as a little-endian [Int].
+ */
+val ByteArray.asInt: Int get() =
+	this.foldIndexed(0) { index, acc, byte ->
+		acc or (byte.toInt() and 0xFF shl (index * 8))
+	}
+
+/**
+ * @return
+ *   This [ByteArray] interpreted as a big-endian [Int].
+ */
+val ByteArray.asBigEndianInt: Int get() =
+	this.reversedArray().foldIndexed(0) { index, acc, byte ->
+		acc or (byte.toInt() and 0xFF shl (index * 8))
+	}

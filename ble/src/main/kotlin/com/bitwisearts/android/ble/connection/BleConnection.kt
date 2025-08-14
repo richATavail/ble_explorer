@@ -17,18 +17,12 @@ import com.bitwisearts.android.ble.connection.BleConnection.Companion.DEFAULT_GA
 import com.bitwisearts.android.ble.connection.BleConnection.Companion.DEFAULT_GATT_MIN_MTU_SIZE
 import com.bitwisearts.android.ble.connection.BleConnection.Companion.HEADER_ATT_SIZE
 import com.bitwisearts.android.ble.connection.BleConnection.Companion.HEADER_L2CAP_SIZE
-import com.bitwisearts.android.ble.connection.BleConnectionState.CONNECTED
-import com.bitwisearts.android.ble.connection.BleConnectionState.CONNECTING
-import com.bitwisearts.android.ble.connection.BleConnectionState.CONNECTION_FAILED
-import com.bitwisearts.android.ble.connection.BleConnectionState.DISCONNECTED
-import com.bitwisearts.android.ble.connection.BleConnectionState.DISCONNECTING
-import com.bitwisearts.android.ble.connection.BleConnectionState.DISCONNECT_REQUESTED
-import com.bitwisearts.android.ble.connection.BleConnectionState.DISCOVERING_SERVICES
-import com.bitwisearts.android.ble.connection.BleConnectionState.MTU_NEGOTIATION
+import com.bitwisearts.android.ble.connection.BleConnectionState.*
 import com.bitwisearts.android.ble.gatt.GattNoAttribute
 import com.bitwisearts.android.ble.gatt.GattNoConnection
 import com.bitwisearts.android.ble.gatt.GattStatusCode
 import com.bitwisearts.android.ble.gatt.KnownGattStatusCode
+import com.bitwisearts.android.ble.gatt.ManualTimeoutGattStatusCode
 import com.bitwisearts.android.ble.gatt.attribute.Characteristic
 import com.bitwisearts.android.ble.gatt.attribute.CharacteristicChangeNotification
 import com.bitwisearts.android.ble.gatt.attribute.CharacteristicId
@@ -48,6 +42,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -138,7 +133,7 @@ open class BleConnection constructor(
 	var gatt: BluetoothGatt? = null
 
 	/**
-	 * Fully close the [gatt] connection; this makes the [gatt] no longer 
+	 * Fully close the [gatt] connection; this makes the [gatt] no longer
 	 * usable.
 	 */
 	fun fullyCloseConnection()
@@ -161,8 +156,16 @@ open class BleConnection constructor(
 		}
 	}
 
+	/**
+	 * The [Job] that manages the connection attempt timeout or `null` if no
+	 * connection attempt is pending completion.
+	 */
 	private var timeoutJob: Job? = null
 
+	/**
+	 * The [HandlerThread] used to process [BluetoothGatt] callbacks on or `null`
+	 * if there is no active connection.
+	 */
 	private var handlerThread: HandlerThread? = null
 
 	/**
@@ -190,7 +193,8 @@ open class BleConnection constructor(
 		timeoutMillis: Long = 6_000L,
 		prioritySetting: ConnectionPriority = ConnectionPriority.BALANCED,
 		phy: PhysicalLayer = PhysicalLayer.PHY_2M,
-		timeoutAction: suspend () -> Unit)
+		timeoutAction: suspend () -> Unit
+	)
 	{
 		if (_connectionState.value == CONNECTED)
 		{
@@ -222,15 +226,14 @@ open class BleConnection constructor(
 				delay(timeoutMillis)
 				if (isActive && _connectionState.value != CONNECTED)
 				{
-					_connectionState.value = CONNECTION_FAILED
+					_connectionState.value = CONNECTION_TIMEOUT
 					timeoutAction()
 					gatt?.close()
-					Log.i("BleConnection","Connection attempt locally timed out.")
+					Log.i("BleConnection", "Connection attempt locally timed out.")
 				}
 			}
 		}
 	}
-
 	////////////////////////////////////////////////////////////////////////////
 	//                        BLE Blocking Requests                           //
 	////////////////////////////////////////////////////////////////////////////
@@ -241,43 +244,68 @@ open class BleConnection constructor(
 	 * @param characteristic
 	 *   The [Characteristic] to read the value from.
 	 * @param timeoutMillis
-	 *   The time in milliseconds to wait for the read to complete before
-	 *   timing out.
+	 *   The time in milliseconds to wait for the write to complete before
+	 *   timing out. If it times out, [BleRequest.cancel] will be called.
+	 *   **NOTE** Android itself has an internal timeout of ~30 seconds for GATT
+	 *   operations; this cannot be overridden. This timeout is to ensure the
+	 *   request does not hang indefinitely if the caller wants to abort sooner.
+	 *   Aborting sooner will still result in the Android internal timeout
+	 *   eventually firing if the operation has not completed or the processing
+	 *   the request if it completes before the internal timeout expires. This
+	 *   should not be altered from the default unless there is a specific need.
+	 *   No other request will be able to be made on the same [BleConnection]
+	 *   until the in-flight request completes or times out.
 	 * @return
 	 *   The [ReadRequestResult] that indicates the result of the read request.
 	 */
-	private suspend fun readCharacteristic(
+	suspend fun readCharacteristic(
 		characteristic: Characteristic,
-		timeoutMillis: Long = 5_000L
-	): ReadRequestResult = withTimeout(timeoutMillis)
+		timeoutMillis: Long = STANDARD_BLOCKING_REQUEST_TIMEOUT_MS
+	): ReadRequestResult
 	{
-		suspendCancellableCoroutine { continuation ->
-			val request = CharacteristicReadRequest(
-				characteristic.characteristicId
-			) { readValue, status ->
-				if (status == KnownGattStatusCode.SUCCESS)
-				{
-					continuation.resume(
-						ReadRequestResult.ReadSuccess(
-							readValue ?: ByteArray(0))
-					)
-				}
-				else
-				{
-					continuation.resume(
-						ReadRequestResult.ReadFailure(
-							status, null
-						)
-					)
-				}
-			}
-			if (isActive)
+		var request: CharacteristicReadRequest? = null
+		return try
+		{
+			withTimeout(timeoutMillis)
 			{
-				ioScope.launch { submitBleRequest(request) }
+				suspendCancellableCoroutine { continuation ->
+					request = CharacteristicReadRequest(
+						characteristic.characteristicId
+					) { readValue, status ->
+						Log.d("BleConnection", "Read Status: $status")
+						if (status == KnownGattStatusCode.SUCCESS)
+						{
+							continuation.resume(
+								ReadRequestResult.ReadSuccess(
+									readValue ?: ByteArray(0)
+								)
+							)
+						}
+						else
+						{
+							continuation.resume(
+								ReadRequestResult.ReadFailure(
+									status, null
+								)
+							)
+						}
+					}
+					if (isActive)
+					{
+						ioScope.launch { submitBleRequest(request) }
+					}
+					continuation.invokeOnCancellation {
+						request.cancel()
+					}
+				}
 			}
-			continuation.invokeOnCancellation {
-				request.cancel()
-			}
+		}
+		catch (e: TimeoutCancellationException)
+		{
+			request?.cancel()
+			ReadRequestResult.ReadFailure(
+				ManualTimeoutGattStatusCode, e
+			)
 		}
 	}
 
@@ -290,44 +318,69 @@ open class BleConnection constructor(
 	 * @param descriptor
 	 *   The [Characteristic] to read the value from.
 	 * @param timeoutMillis
-	 *   The time in milliseconds to wait for the read to complete before
-	 *   timing out.
+	 *   The time in milliseconds to wait for the write to complete before
+	 *   timing out. If it times out, [BleRequest.cancel] will be called.
+	 *   **NOTE** Android itself has an internal timeout of ~30 seconds for GATT
+	 *   operations; this cannot be overridden. This timeout is to ensure the
+	 *   request does not hang indefinitely if the caller wants to abort sooner.
+	 *   Aborting sooner will still result in the Android internal timeout
+	 *   eventually firing if the operation has not completed or the processing
+	 *   the request if it completes before the internal timeout expires. This
+	 *   should not be altered from the default unless there is a specific need.
+	 *   No other request will be able to be made on the same [BleConnection]
+	 *   until the in-flight request completes or times out.
 	 * @return
 	 *   The [ReadRequestResult] that indicates the result of the read request.
 	 */
 	suspend fun readDescriptor(
 		characteristic: Characteristic,
 		descriptor: Descriptor,
-		timeoutMillis: Long = 5_000L
-	): ReadRequestResult = withTimeout(timeoutMillis)
+		timeoutMillis: Long = STANDARD_BLOCKING_REQUEST_TIMEOUT_MS
+	): ReadRequestResult
 	{
-		suspendCancellableCoroutine { continuation ->
-			val request = DescriptorReadRequest(
-				characteristic.descriptorId(descriptor)
-			) { readValue, status ->
-				if (status == KnownGattStatusCode.SUCCESS)
-				{
-					continuation.resume(
-						ReadRequestResult.ReadSuccess(
-							readValue ?: ByteArray(0))
-					)
-				}
-				else
-				{
-					continuation.resume(
-						ReadRequestResult.ReadFailure(
-							status, null
-						)
-					)
-				}
-			}
-			if (isActive)
+		var request: DescriptorReadRequest? = null
+		return try
+		{
+			withTimeout(timeoutMillis)
 			{
-				ioScope.launch { submitBleRequest(request) }
+				suspendCancellableCoroutine { continuation ->
+					request = DescriptorReadRequest(
+						characteristic.descriptorId(descriptor)
+					)
+					{ readValue, status ->
+						if (status == KnownGattStatusCode.SUCCESS)
+						{
+							continuation.resume(
+								ReadRequestResult.ReadSuccess(
+									readValue ?: ByteArray(0)
+								)
+							)
+						}
+						else
+						{
+							continuation.resume(
+								ReadRequestResult.ReadFailure(
+									status, null
+								)
+							)
+						}
+					}
+					if (isActive)
+					{
+						ioScope.launch { submitBleRequest(request) }
+					}
+					continuation.invokeOnCancellation {
+						request.cancel()
+					}
+				}
 			}
-			continuation.invokeOnCancellation {
-				request.cancel()
-			}
+		}
+		catch (e: TimeoutCancellationException)
+		{
+			request?.cancel()
+			ReadRequestResult.ReadFailure(
+				ManualTimeoutGattStatusCode, e
+			)
 		}
 	}
 
@@ -341,7 +394,16 @@ open class BleConnection constructor(
 	 *   The [ByteArray] value to write to the [characteristic].
 	 * @param timeoutMillis
 	 *   The time in milliseconds to wait for the write to complete before
-	 *   timing out.
+	 *   timing out. If it times out, [BleRequest.cancel] will be called.
+	 *   **NOTE** Android itself has an internal timeout of ~30 seconds for GATT
+	 *   operations; this cannot be overridden. This timeout is to ensure the
+	 *   request does not hang indefinitely if the caller wants to abort sooner.
+	 *   Aborting sooner will still result in the Android internal timeout
+	 *   eventually firing if the operation has not completed or the processing
+	 *   the request if it completes before the internal timeout expires. This
+	 *   should not be altered from the default unless there is a specific need.
+	 *   No other request will be able to be made on the same [BleConnection]
+	 *   until the in-flight request completes or times out.
 	 * @return
 	 *   The [WriteRequestResult] that indicates the result of the write
 	 *   request.
@@ -349,32 +411,50 @@ open class BleConnection constructor(
 	suspend fun writeCharacteristic(
 		characteristic: Characteristic,
 		value: ByteArray,
-		timeoutMillis: Long = 5_000L
-	): WriteRequestResult = withTimeout(timeoutMillis)
+		timeoutMillis: Long = STANDARD_BLOCKING_REQUEST_TIMEOUT_MS
+	): WriteRequestResult
 	{
-		suspendCancellableCoroutine { continuation ->
-			val request = CharacteristicWriteRequest(
-				identifier = characteristic.characteristicId,
-				mtu = mtu,
-				payload = value
-			) { status ->
-				if (status == KnownGattStatusCode.SUCCESS)
-				{
-					continuation.resume(WriteRequestResult.WriteSuccess)
-				}
-				else
-				{
-					continuation.resume(WriteRequestResult.WriteFailure(
-						status, null))
-				}
-			}
-			if (isActive)
+		var request: CharacteristicWriteRequest? = null
+		return try
+		{
+			withTimeout(timeoutMillis)
 			{
-				ioScope.launch { submitBleRequest(request) }
+				suspendCancellableCoroutine { continuation ->
+					request = CharacteristicWriteRequest(
+						identifier = characteristic.characteristicId,
+						mtu = mtu,
+						payload = value
+					) { status ->
+						if (status == KnownGattStatusCode.SUCCESS)
+						{
+							continuation.resume(
+								WriteRequestResult.WriteSuccess)
+						}
+						else
+						{
+							continuation.resume(
+								WriteRequestResult.WriteFailure(
+									status, null
+								)
+							)
+						}
+					}
+					if (isActive)
+					{
+						ioScope.launch { submitBleRequest(request) }
+					}
+					continuation.invokeOnCancellation {
+						request.cancel()
+					}
+				}
 			}
-			continuation.invokeOnCancellation {
-				request.cancel()
-			}
+		}
+		catch (e: TimeoutCancellationException)
+		{
+			request?.cancel()
+			WriteRequestResult.WriteFailure(
+				ManualTimeoutGattStatusCode, e
+			)
 		}
 	}
 
@@ -391,7 +471,16 @@ open class BleConnection constructor(
 	 *   The [ByteArray] value to write to the [descriptor].
 	 * @param timeoutMillis
 	 *   The time in milliseconds to wait for the write to complete before
-	 *   timing out.
+	 *   timing out. If it times out, [BleRequest.cancel] will be called.
+	 *   **NOTE** Android itself has an internal timeout of ~30 seconds for GATT
+	 *   operations; this cannot be overridden. This timeout is to ensure the
+	 *   request does not hang indefinitely if the caller wants to abort sooner.
+	 *   Aborting sooner will still result in the Android internal timeout
+	 *   eventually firing if the operation has not completed or the processing
+	 *   the request if it completes before the internal timeout expires. This
+	 *   should not be altered from the default unless there is a specific need.
+	 *   No other request will be able to be made on the same [BleConnection]
+	 *   until the in-flight request completes or times out.
 	 * @return
 	 *   The [WriteRequestResult] that indicates the result of the write
 	 *   request.
@@ -400,35 +489,51 @@ open class BleConnection constructor(
 		characteristic: Characteristic,
 		descriptor: Descriptor,
 		value: ByteArray,
-		timeoutMillis: Long = 5_000L
-	): WriteRequestResult = withTimeout(timeoutMillis)
+		timeoutMillis: Long = STANDARD_BLOCKING_REQUEST_TIMEOUT_MS
+	): WriteRequestResult
 	{
-		suspendCancellableCoroutine { continuation ->
-			val request = DescriptorWriteRequest(
-				identifier = characteristic.descriptorId(descriptor),
-				mtu = mtu,
-				payload = value
-			) { status ->
-				if (status == KnownGattStatusCode.SUCCESS)
-				{
-					continuation.resume(WriteRequestResult.WriteSuccess)
-				}
-				else
-				{
-					continuation.resume(WriteRequestResult.WriteFailure(
-						status, null))
-				}
-			}
-			if (isActive)
+		var request: DescriptorWriteRequest? = null
+		return try
+		{
+			withTimeout(timeoutMillis)
 			{
-				ioScope.launch { submitBleRequest(request) }
-			}
-			continuation.invokeOnCancellation {
-				request.cancel()
+				suspendCancellableCoroutine { continuation ->
+					request = DescriptorWriteRequest(
+						identifier = characteristic.descriptorId(descriptor),
+						mtu = mtu,
+						payload = value
+					) { status ->
+						if (status == KnownGattStatusCode.SUCCESS)
+						{
+							continuation.resume(WriteRequestResult.WriteSuccess)
+						}
+						else
+						{
+							continuation.resume(
+								WriteRequestResult.WriteFailure(
+									status, null
+								)
+							)
+						}
+					}
+					if (isActive)
+					{
+						ioScope.launch { submitBleRequest(request) }
+					}
+					continuation.invokeOnCancellation {
+						request.cancel()
+					}
+				}
 			}
 		}
+		catch (e: TimeoutCancellationException)
+		{
+			request?.cancel()
+			WriteRequestResult.WriteFailure(
+				ManualTimeoutGattStatusCode, e
+			)
+		}
 	}
-
 	////////////////////////////////////////////////////////////////////////////
 	//                          BLE Async Requests                            //
 	////////////////////////////////////////////////////////////////////////////
@@ -499,6 +604,7 @@ open class BleConnection constructor(
 	 */
 	suspend fun submitBleRequest(bleRequest: BleRequest<*, *>)
 	{
+		Log.d("BleConnection", "Submitting $bleRequest")
 		val state = connectionState.value
 		if (state == CONNECTED)
 		{
@@ -643,6 +749,13 @@ open class BleConnection constructor(
 	{
 		ioScope.launch {
 			val req = bleRequestChannel.receive()
+			Log.d("BleConnection", "Processing $req")
+			if(
+				req !is EnableNotifyCharacteristicRequest
+					&& _connectionState.value != CONNECTED
+			) {
+				_connectionState.value = CONNECTED
+			}
 			processBleRequest(req)
 		}
 	}
@@ -858,10 +971,11 @@ open class BleConnection constructor(
 				mutex.withLock {
 					// The GATT services are fully populated and ready for use.
 					this@BleConnection.gatt = gatt
-					val priorityResult = gatt.requestConnectionPriority(prioritySetting.code)
+					val priorityResult = gatt.requestConnectionPriority(
+						prioritySetting.code)
 					Log.d(
 						"BLE_Connection_Priority",
-						"Set connection priority to $prioritySetting: $priorityResult")
+						"Set connection priority to ${prioritySetting.code}: $priorityResult")
 					val serviceMap = mutableMapOf<UUID, BluetoothGattService>()
 					val charMap = 
 						mutableMapOf<CharacteristicId, BluetoothGattCharacteristic>()
@@ -884,10 +998,27 @@ open class BleConnection constructor(
 					_gattDescriptorMap.value = descrMap
 					if (_connectionState.value == DISCOVERING_SERVICES)
 					{
-						val prioritySetting =
-							gatt.requestConnectionPriority(prioritySetting.code)
+						val prioritySettingResult =
+							gatt.requestConnectionPriority(
+								prioritySetting.code)
+						Log.d(
+							"BLE_Connection_Priority",
+							"Set connection priority to " +
+								"${prioritySetting.code}: " +
+								"$prioritySettingResult")
 						// TODO make sure we transition to being fully connected
 						//  only after all requested notifications are enabled.
+						var notifyCount = device.notifyCharacteristics.size
+						if (notifyCount == 0)
+						{
+							// No notifications to enable, so we can proceed
+							// directly to connected state.
+							_connectionState.value = CONNECTED
+							afterServicesDiscovered(this@BleConnection)
+							processNextRequest()
+							return@withLock
+						}
+						_connectionState.value = NOTIFICATION_SETUP
 						device.notifyCharacteristics.forEach {
 							submitBleRequest(
 								EnableNotifyCharacteristicRequest(
@@ -895,6 +1026,16 @@ open class BleConnection constructor(
 									this@BleConnection,
 									ioScope
 								) { success, status ->
+									if (--notifyCount == 0) {
+										// All notification requests
+										// processed, move to connected
+										// state.
+										_connectionState.value = CONNECTED
+										ioScope.launch {
+											afterServicesDiscovered(
+												this@BleConnection)
+										}
+									}
 									if (!success)
 									{
 										Log.w(
@@ -914,9 +1055,7 @@ open class BleConnection constructor(
 								}
 							)
 						}
-						// This connection is now ready for general use.
-						_connectionState.value = CONNECTED
-						afterServicesDiscovered(this@BleConnection)
+						processNextRequest()
 					}
 				}
 			}
@@ -1206,6 +1345,18 @@ open class BleConnection constructor(
 		 */
 		const val ADJUSTED_MIN_MTU_SIZE: Int =
 			DEFAULT_GATT_MIN_MTU_SIZE - TOTAL_HEADER_BLE_SIZE
+
+		/**
+		 * The standard request timeout in milliseconds for blocking BLE
+		 * requests.
+		 *
+		 * **NOTE** Android itself has an internal timeout of ~30 seconds for
+		 * GATT operations; this cannot be overridden. This timeout is to
+		 * provide a more responsive failure to the caller. This is set to
+		 * 31 seconds to be just beyond the Android internal timeout to avoid
+		 * conflicts by default.
+		 */
+		private const val STANDARD_BLOCKING_REQUEST_TIMEOUT_MS: Long = 31_000L
 	}
 
 	/**

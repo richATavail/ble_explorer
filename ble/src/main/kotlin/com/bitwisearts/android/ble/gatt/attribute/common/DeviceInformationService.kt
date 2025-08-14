@@ -38,6 +38,8 @@ object ManufacturerName: CommonCharacteristic(
 {
 	override val service: Service get() = DeviceInformationService
 	override val descriptors: Set<Descriptor> = setOf()
+	override fun stringifyValue(value: ByteArray): String =
+		String(value, Charsets.UTF_8)
 }
 
 /**
@@ -51,6 +53,8 @@ object ModelNumber: CommonCharacteristic(
 {
 	override val service: Service get() = DeviceInformationService
 	override val descriptors: Set<Descriptor> = setOf()
+	override fun stringifyValue(value: ByteArray): String =
+		String(value, Charsets.UTF_8)
 }
 
 /**
@@ -64,6 +68,8 @@ object SerialNumber: CommonCharacteristic(
 {
 	override val service: Service get() = DeviceInformationService
 	override val descriptors: Set<Descriptor> = setOf()
+	override fun stringifyValue(value: ByteArray): String =
+		String(value, Charsets.UTF_8)
 }
 
 /**
@@ -90,6 +96,8 @@ object FirmwareRevision: CommonCharacteristic(
 {
 	override val service: Service get() = DeviceInformationService
 	override val descriptors: Set<Descriptor> = setOf()
+	override fun stringifyValue(value: ByteArray): String =
+		String(value, Charsets.UTF_8)
 }
 
 /**
@@ -103,6 +111,8 @@ object SoftwareRevision: CommonCharacteristic(
 {
 	override val service: Service get() = DeviceInformationService
 	override val descriptors: Set<Descriptor> = setOf()
+	override fun stringifyValue(value: ByteArray): String =
+		String(value, Charsets.UTF_8)
 }
 
 /**
