@@ -27,7 +27,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -37,10 +36,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bitwisearts.android.ble.BleDevice
 import com.bitwisearts.android.ble.advertisement.Advertisement
+import com.bitwisearts.android.ble.advertisement.AdvertisingDataType
 import com.bitwisearts.android.ble.connection.BleConnection
 import com.bitwisearts.android.ble.connection.BleConnectionState
 import com.bitwisearts.android.ble.connection.BleDeviceManager
@@ -53,9 +54,11 @@ import com.bitwisearts.android.ble.gatt.attribute.attributePermissions
 import com.bitwisearts.android.ble.gatt.attribute.bleCharacteristicProperties
 import com.bitwisearts.android.ble.gatt.attribute.common.CommonCharacteristic
 import com.bitwisearts.android.ble.gatt.attribute.common.CommonService
+import com.bitwisearts.android.ble.gatt.attribute.common.HeartRateMeasurement
 import com.bitwisearts.android.ble.request.ReadRequestResult
 import com.bitwisearts.android.explorer.ExplorerApp
 import com.bitwisearts.android.explorer.R
+import com.bitwisearts.android.explorer.ble.device.HeartRateBleDevice
 import com.bitwisearts.android.explorer.ui.components.AdvertisementExpanded
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
@@ -160,7 +163,10 @@ fun DeviceView (
 			if (servicesExpanded.value) {
 				services.forEach { (k, v) ->
 					Log.d("DeviceView", "Adding Service $k")
-					ServiceView(v, viewModel.connection)
+					ServiceView(
+						v,
+						viewModel.connection,
+						viewModel.connection.device)
 				}
 			}
 		}
@@ -169,11 +175,20 @@ fun DeviceView (
 
 /**
  * A view of the provided [BluetoothGattService].
+ *
+ * @param service
+ *   The [BluetoothGattService] to view.
+ * @param bleConnection
+ *  The [BleConnection] to use for any operations on the service's
+ *  [BluetoothGattCharacteristic]s.
+ * @param bleDevice
+ *  The [BleDevice] to which the service belongs.
  */
 @Composable
 fun ServiceView(
 	service: BluetoothGattService,
-	bleConnection: BleConnection
+	bleConnection: BleConnection,
+	bleDevice: BleDevice
 ) {
 	// TODO totally can do this better!
 	val unrecognized = stringResource(id = R.string.unrecognized)
@@ -213,7 +228,8 @@ fun ServiceView(
 						charName = knownName,
 						properties = bgc.bleCharacteristicProperties,
 						permissions = bgc.attributePermissions,
-						bleConnection = bleConnection
+						bleConnection = bleConnection,
+						bleDevice = bleDevice
 					)
 				}
 			}
@@ -235,6 +251,8 @@ fun ServiceView(
  *   The set of [AttributePermission]s of the [BluetoothGattCharacteristic].
  * @param bleConnection
  *   The [BleConnection] to use for any operations on the characteristic.
+ * @param bleDevice
+ *   The [BleDevice] to which the characteristic belongs.
  */
 @Composable
 fun CharacteristicView(
@@ -242,7 +260,8 @@ fun CharacteristicView(
 	charName: String,
 	properties: Set<BleCharacteristicProperty>,
 	permissions: Set<AttributePermission>,
-	bleConnection: BleConnection
+	bleConnection: BleConnection,
+	bleDevice: BleDevice
 ) {
 	Column(modifier = Modifier.padding(vertical = 9.dp, horizontal = 12.dp))
 	{
@@ -287,7 +306,16 @@ fun CharacteristicView(
 		{
 			ReadCharacteristicView(
 				characteristic = characteristic,
-				bleConnection = bleConnection
+				bleConnection = bleConnection,
+			)
+		}
+		else if (bleDevice is HeartRateBleDevice &&
+			characteristic.uuid == HeartRateMeasurement.uuid)
+		{
+			NotifyCharacteristicView(
+				characteristic = characteristic,
+				bleConnection = bleConnection,
+				notifyFlow = bleDevice.heartRate
 			)
 		}
 	}
@@ -338,6 +366,33 @@ fun ColumnScope.ReadCharacteristicView(
 }
 
 /**
+ * A view that allows reading from the given [Characteristic].
+ *
+ * @param characteristic
+ *   The [Characteristic] to subscribe to notifications from.
+ * @param bleConnection
+ *   The [BleConnection] to use to read the characteristic.
+ */
+@Composable
+fun ColumnScope.NotifyCharacteristicView(
+	characteristic: Characteristic,
+	bleConnection: BleConnection,
+	notifyFlow: StateFlow<ByteArray>)
+{
+	val notifyValue by notifyFlow.collectAsStateWithLifecycle()
+	Row(Modifier.fillMaxWidth()) {
+		Text(
+			text = stringResource(id = R.string.notify),
+			modifier = Modifier.padding(end = 5.dp),
+			fontWeight = FontWeight.Bold,
+			fontSize = 10.sp)
+		Text(
+			text = characteristic.stringifyValue(notifyValue),
+			fontSize = 10.sp)
+	}
+}
+
+/**
  * The [ViewModel] for the [DeviceView].
  *
  * @author Richard Arriaga.
@@ -364,7 +419,20 @@ class DeviceViewModel: ViewModel()
 
 	/** The target [BleDevice] to connect to. */
 	private val device: BleDevice by lazy {
-		BleDevice(selectedAddress.value, selectedAdvertisement).apply {
+		val heartService =
+			selectedAdvertisement?.advertisementData?.firstOrNull {
+				it.type == AdvertisingDataType.COMPLETE_16_SERVICE_UUID
+					&& HeartRateBleDevice.isHeartRateDevice(it.data)
+			}
+		if (heartService != null)
+		{
+			Log.d("DeviceViewModel", "It's a Heart Rate Monitor!")
+			HeartRateBleDevice(selectedAddress.value, selectedAdvertisement)
+		}
+		else
+		{
+			BleDevice(selectedAddress.value, selectedAdvertisement)
+		}.apply {
 			BleDeviceManager.devices[macAddress] = this
 		}
 	}
@@ -406,8 +474,8 @@ class DeviceViewModel: ViewModel()
 	}
 
 	/**
-	 * Disconnect [disconnect][BleConnection.disconnect] from the [device].
-	 * This should allow for future reconnections to the device.
+	 * Disconnect [disconnect][BleConnection.fullyCloseConnection] from the
+	 * [device].
 	 */
 	fun disconnect ()
 	{

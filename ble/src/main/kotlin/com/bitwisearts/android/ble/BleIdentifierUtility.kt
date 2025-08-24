@@ -66,7 +66,7 @@ fun standardUUID(byte1: Byte, byte2: Byte): UUID
 	// The two byte value is the right most two bytes of the most significant
 	// 4 bytes of the [UUID] most significant bits. The value requires a bit shift
 	// of 32 bits to get it into the proper position of the upper two bytes.
-	val upper32 = (byte1.toLong() shl 8 + byte2) shl 32
+	val upper32 = ((byte1.toLong() shl 8) + byte2) shl 32
 	val mostSigBits = upper32 + STANDARD_BLE_UUID_BASE_MOST_SIG
 	return UUID(mostSigBits, STANDARD_BLE_UUID_LEAST_SIG)
 }

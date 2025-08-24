@@ -22,6 +22,8 @@
 	<string name="properties">Properties</string>
 	<string name="permissions">Permissions</string>
 
+	<string name="notify">Notify</string>
+
 	<string name="unrecognized">Unrecognized</string>
 	<string name="service">Service</string>
 	<string name="characteristic">Characteristic</string>

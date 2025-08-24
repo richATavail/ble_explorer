@@ -8,7 +8,7 @@ import android.bluetooth.BluetoothProfile
  *
  * @author Richard Arriaga
  */
-interface ConnectionState
+sealed interface ConnectionState
 {
 	/** `true` if the device is connected via BLE; `false` otherwise. */
 	val isConnected: Boolean
@@ -132,7 +132,7 @@ enum class BleConnectionState (
 		 */
 		operator fun get(statusCode: Int): ConnectionState
 		{
-			for (state in values())
+			for (state in entries)
 			{
 				if (statusCode == state.statusCode)
 				{

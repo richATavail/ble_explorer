@@ -606,7 +606,8 @@ open class BleConnection constructor(
 	{
 		Log.d("BleConnection", "Submitting $bleRequest")
 		val state = connectionState.value
-		if (state == CONNECTED)
+		if (state == CONNECTED || (state == NOTIFICATION_SETUP
+				&& bleRequest is EnableNotifyCharacteristicRequest))
 		{
 			bleRequestChannel.send(bleRequest)
 		}
@@ -625,10 +626,30 @@ open class BleConnection constructor(
 	private suspend fun processBleRequest(bleRequest: BleRequest<*, *>)
 	{
 		val state = connectionState.value
-		if (state != CONNECTED)
+		when(state)
 		{
-			failRequestNoConnection(bleRequest, state)
-			return
+			CONNECTED -> {
+				// Normal processing below.
+			}
+			NOTIFICATION_SETUP -> {
+				if (bleRequest !is EnableNotifyCharacteristicRequest)
+				{
+					failRequestNoConnection(bleRequest, state)
+					return
+				}
+			}
+			CONNECTING,
+			DISCONNECTED,
+			DISCONNECTING,
+			MTU_NEGOTIATION,
+			DISCOVERING_SERVICES,
+			CONNECTION_FAILED,
+			CONNECTION_TIMEOUT,
+			DISCONNECT_REQUESTED,
+			is InvalidConnectionState -> {
+				failRequestNoConnection(bleRequest, state)
+				return
+			}
 		}
 		when (bleRequest)
 		{
@@ -1020,6 +1041,8 @@ open class BleConnection constructor(
 						}
 						_connectionState.value = NOTIFICATION_SETUP
 						device.notifyCharacteristics.forEach {
+							Log.d("BleConnection",
+								"Enabling notify for characteristic: $it")
 							submitBleRequest(
 								EnableNotifyCharacteristicRequest(
 									it.characteristicId,
