@@ -28,7 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.bitwisearts.android.explorer.ui.theme.Ble_explorerTheme
+import com.bitwisearts.android.explorer.ui.theme.BleExplorerTheme
 
 /**
  * The sole [Activity][ComponentActivity] that contains this application's view.
@@ -152,7 +152,7 @@ class MainActivity : ComponentActivity()
 //				}
 //			}
 			val navController = rememberNavController()
-			Ble_explorerTheme {
+			BleExplorerTheme {
 				Scaffold(
 					contentWindowInsets = WindowInsets.safeDrawing,
 					bottomBar = { BottomNavigation(navController = navController) }

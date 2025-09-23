@@ -124,7 +124,14 @@ open class BleConnection constructor(
 		MutableStateFlow(DISCONNECTED)
 
 	/** The current [ConnectionState] of this [BleConnection]. */
-	val connectionState = _connectionState.asStateFlow()
+	internal val connectionState = _connectionState.asStateFlow()
+
+	/**
+	 * The point in time check to determine if this [BleConnection] is
+	 * currently connected to the [BleDevice]. This is a convenience property
+	 * that checks if the [connectionState] is [CONNECTED].
+	 */
+	val isConnected: Boolean get() = _connectionState.value == CONNECTED
 
 	/**
 	 * The [BluetoothGatt] that represents a connection to the [BleDevice] or
@@ -189,13 +196,12 @@ open class BleConnection constructor(
 	 *   The lambda that is executed if the connection attempt times out.
 	 */
 	suspend fun connect(
-		autoConnect: Boolean = true,
+		autoConnect: Boolean = false,
 		timeoutMillis: Long = 6_000L,
 		prioritySetting: ConnectionPriority = ConnectionPriority.BALANCED,
-		phy: PhysicalLayer = PhysicalLayer.PHY_2M,
+		phy: PhysicalLayer = PhysicalLayer.PHY_1M,
 		timeoutAction: suspend () -> Unit
-	)
-	{
+	) {
 		if (_connectionState.value == CONNECTED)
 		{
 			return

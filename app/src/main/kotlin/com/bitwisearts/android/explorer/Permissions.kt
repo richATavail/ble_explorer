@@ -100,6 +100,7 @@ sealed interface ExplorerPermission
 				{
 					ScanPermission.permission -> ScanPermission
 					ConnectPermission.permission -> ConnectPermission
+					AdvertisePermission.permission -> AdvertisePermission
 					else -> null
 				}
 			}
@@ -177,4 +178,21 @@ object FinePermission: ExplorerPermission
 	override val description: Int = R.string.fine_location_permission_reason
 
 	override val declinedText: Int = R.string.fine_permission_declined
+}
+
+/**
+ * The [ExplorerPermission] for the permission to
+ * [advertise][Manifest.permission.BLUETOOTH_ADVERTISE] as a BLE peripheral as of
+ * Android API 31.
+ *
+ * @author Richard Arriaga
+ */
+object AdvertisePermission: ExplorerPermission
+{
+	@RequiresApi(Build.VERSION_CODES.S)
+	override val permission: String = Manifest.permission.BLUETOOTH_ADVERTISE
+
+	override val description: Int = R.string.advertise_permission_reason
+
+	override val declinedText: Int = R.string.advertise_permission_declined
 }

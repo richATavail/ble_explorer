@@ -37,6 +37,13 @@ sealed class CommonCharacteristic constructor(
 		}
 
 		/**
+		 * The [Map] of all known common [Characteristic]s by their
+		 * [Characteristic.uuid].
+		 */
+		val allCharacteristics: Map<UUID, Characteristic> get() =
+			commonCharacteristics.toMap()
+
+		/**
 		 * Answer the known common [Characteristic] for the given
 		 * [Characteristic.uuid].
 		 *

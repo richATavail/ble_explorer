@@ -62,7 +62,7 @@ class MainViewModel: ViewModel()
 		 */
 		@RequiresApi(Build.VERSION_CODES.S)
 		val permissions31 =
-			mutableSetOf(ConnectPermission, ScanPermission, FinePermission)
+			mutableSetOf(ConnectPermission, ScanPermission, FinePermission, AdvertisePermission)
 
 		/**
 		 * The set of [permissions][ExplorerPermission] required for

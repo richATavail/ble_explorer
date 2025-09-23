@@ -31,7 +31,7 @@ import com.bitwisearts.android.ble.connection.BleDeviceManager
 import com.bitwisearts.android.ble.utility.asCompactHex
 import com.bitwisearts.android.explorer.DeviceRoute
 import com.bitwisearts.android.explorer.R
-import com.bitwisearts.android.explorer.ui.theme.Ble_explorerTheme
+import com.bitwisearts.android.explorer.ui.theme.BleExplorerTheme
 import java.util.UUID
 
 /**
@@ -254,7 +254,7 @@ fun ColumnScope.AdvertisementDataView (data: AdvertisementData)
 @Composable
 fun AdvertisementCollapsedPreview()
 {
-	Ble_explorerTheme {
+	BleExplorerTheme {
 		Column {
 			AdvertisementCollapsed(
 				"00:11:22:AA:BB:CC",
@@ -267,7 +267,7 @@ fun AdvertisementCollapsedPreview()
 @Composable
 fun AdvertisementExpandedPreview()
 {
-	Ble_explorerTheme {
+	BleExplorerTheme {
 		Column {
 			AdvertisementExpandedWithExploreButton(
 				"00:11:22:AA:BB:CC",
@@ -288,7 +288,7 @@ fun AdvertisementExpandedPreview()
 @Composable
 fun AdvertisementDataPreview()
 {
-	Ble_explorerTheme {
+	BleExplorerTheme {
 		Column {
 			AdvertisementDataView(
 				ManufacturerData(byteArrayOf(3, 4, 22, -44)))

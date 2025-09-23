@@ -35,6 +35,11 @@ sealed class CommonService constructor(
 		}
 
 		/**
+		 * The [Map] of all known common [Service]s by their [Service.uuid].
+		 */
+		val allServices: Map<UUID, Service> get() = commonServices.toMap()
+
+		/**
 		 * Answer the known common [Service] for the given [Service.uuid].
 		 *
 		 * @param uuid

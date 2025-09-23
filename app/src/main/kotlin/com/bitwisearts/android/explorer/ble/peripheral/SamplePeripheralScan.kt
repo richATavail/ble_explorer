@@ -1,4 +1,4 @@
-package com.bitwisearts.android.explorer.ble
+package com.bitwisearts.android.explorer.ble.peripheral
 
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
@@ -17,7 +17,7 @@ import kotlinx.coroutines.SupervisorJob
  *
  * @author Richard Arriaga
  */
-class ExplorerScan constructor(
+class SamplePeripheralScan constructor(
 	scanDuration: Long,
 	allowDuplicates: Boolean,
 	bleScanManager: BleScanManager,
@@ -31,7 +31,15 @@ class ExplorerScan constructor(
 	onScanFailure,
 	scanScope)
 {
-	override val scanFilters: List<ScanFilter> = listOf()
+	override val scanFilters: List<ScanFilter> =
+		listOf(
+			ScanFilter.Builder()
+				.setServiceData(
+					SampleBleService.asParcelUuid,
+					byteArrayOf()
+				)
+				.build()
+		)
 
 	/** The list of discovered BLE [Advertisement]s. */
 	val found = mutableStateListOf<Advertisement>()
@@ -46,6 +54,6 @@ class ExplorerScan constructor(
 	}
 
 	companion object {
-		private const val TAG = "ExplorerScan"
+		private const val TAG = "SamplePeripheralScan"
 	}
 }

@@ -20,9 +20,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -37,6 +36,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bitwisearts.android.ble.BleDevice
@@ -52,13 +52,14 @@ import com.bitwisearts.android.ble.gatt.attribute.Characteristic
 import com.bitwisearts.android.ble.gatt.attribute.UnrecognizedService
 import com.bitwisearts.android.ble.gatt.attribute.attributePermissions
 import com.bitwisearts.android.ble.gatt.attribute.bleCharacteristicProperties
-import com.bitwisearts.android.ble.gatt.attribute.common.CommonCharacteristic
-import com.bitwisearts.android.ble.gatt.attribute.common.CommonService
 import com.bitwisearts.android.ble.gatt.attribute.common.HeartRateMeasurement
 import com.bitwisearts.android.ble.request.ReadRequestResult
 import com.bitwisearts.android.explorer.ExplorerApp
 import com.bitwisearts.android.explorer.R
+import com.bitwisearts.android.explorer.ble.CharacteristicManager
+import com.bitwisearts.android.explorer.ble.ServiceManager
 import com.bitwisearts.android.explorer.ble.device.HeartRateBleDevice
+import com.bitwisearts.android.explorer.ble.peripheral.SampleBleDevice
 import com.bitwisearts.android.explorer.ui.components.AdvertisementExpanded
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
@@ -78,7 +79,7 @@ fun DeviceView (
 	{
 		val observer = LifecycleEventObserver { _, event ->
 			if (event == Lifecycle.Event.ON_STOP) {
-				viewModel.connection.fullyCloseConnection()
+				viewModel.device.connection.fullyCloseConnection()
 			}
 		}
 
@@ -108,6 +109,22 @@ fun DeviceView (
 				it.serviceUUIDs,
 				it.scanRecordBytes,
 				it.advertisementData)
+			Row {
+				Text(
+					text = stringResource(id = R.string.device_type),
+					modifier = Modifier.padding(end = 5.dp),
+					fontWeight = FontWeight.Bold
+				)
+				val deviceType =
+					if (viewModel.device is HeartRateBleDevice) {
+						stringResource(id = R.string.heart_rate_monitor)
+					} else if (viewModel.device is SampleBleDevice) {
+						stringResource(id = R.string.sample_device)
+					} else {
+						stringResource(id = R.string.unknown)
+					}
+				Text(text = deviceType)
+			}
 			Text(text = connectionState.label)
 			Button(onClick =
 				{
@@ -163,10 +180,7 @@ fun DeviceView (
 			if (servicesExpanded.value) {
 				services.forEach { (k, v) ->
 					Log.d("DeviceView", "Adding Service $k")
-					ServiceView(
-						v,
-						viewModel.connection,
-						viewModel.connection.device)
+					ServiceView(v, viewModel.device)
 				}
 			}
 		}
@@ -178,8 +192,6 @@ fun DeviceView (
  *
  * @param service
  *   The [BluetoothGattService] to view.
- * @param bleConnection
- *  The [BleConnection] to use for any operations on the service's
  *  [BluetoothGattCharacteristic]s.
  * @param bleDevice
  *  The [BleDevice] to which the service belongs.
@@ -187,12 +199,11 @@ fun DeviceView (
 @Composable
 fun ServiceView(
 	service: BluetoothGattService,
-	bleConnection: BleConnection,
 	bleDevice: BleDevice
 ) {
 	// TODO totally can do this better!
 	val unrecognized = stringResource(id = R.string.unrecognized)
-	val s = CommonService[service.uuid] ?:
+	val s = ServiceManager[service.uuid] ?:
 		UnrecognizedService(
 			service.uuid,
 			"$unrecognized ${stringResource(id = R.string.service)}",
@@ -221,14 +232,13 @@ fun ServiceView(
 			Row(Modifier.fillMaxWidth().padding(start = 1.dp))
 			{
 				service.getCharacteristic(it.uuid)?.let { bgc ->
-					val knownName = CommonCharacteristic[it.uuid]?.name ?:
+					val knownName = CharacteristicManager[it.uuid]?.name ?:
 						"$unrecognized ${stringResource(id = R.string.characteristic)}"
 					CharacteristicView(
 						characteristic = it,
 						charName = knownName,
 						properties = bgc.bleCharacteristicProperties,
 						permissions = bgc.attributePermissions,
-						bleConnection = bleConnection,
 						bleDevice = bleDevice
 					)
 				}
@@ -260,7 +270,6 @@ fun CharacteristicView(
 	charName: String,
 	properties: Set<BleCharacteristicProperty>,
 	permissions: Set<AttributePermission>,
-	bleConnection: BleConnection,
 	bleDevice: BleDevice
 ) {
 	Column(modifier = Modifier.padding(vertical = 9.dp, horizontal = 12.dp))
@@ -306,7 +315,7 @@ fun CharacteristicView(
 		{
 			ReadCharacteristicView(
 				characteristic = characteristic,
-				bleConnection = bleConnection,
+				device = bleDevice,
 			)
 		}
 		else if (bleDevice is HeartRateBleDevice &&
@@ -314,7 +323,6 @@ fun CharacteristicView(
 		{
 			NotifyCharacteristicView(
 				characteristic = characteristic,
-				bleConnection = bleConnection,
 				notifyFlow = bleDevice.heartRate
 			)
 		}
@@ -326,15 +334,15 @@ fun CharacteristicView(
  *
  * @param characteristic
  *   The [Characteristic] to read from.
- * @param bleConnection
+ * @param device
  *   The [BleConnection] to use to read the characteristic.
  */
 @Composable
 fun ColumnScope.ReadCharacteristicView(
 	characteristic: Characteristic,
-	bleConnection: BleConnection)
+	device: BleDevice)
 {
-	val connectionState by bleConnection.connectionState
+	val connectionState by device.connectionState
 		.collectAsStateWithLifecycle()
 	var readResult: ReadRequestResult? by remember {
 		mutableStateOf(null)
@@ -345,7 +353,8 @@ fun ColumnScope.ReadCharacteristicView(
 			enabled = connectionState == BleConnectionState.CONNECTED,
 			onClick = {
 				scope.launch(Dispatchers.IO) {
-					readResult = bleConnection.readCharacteristic(characteristic)
+					readResult =
+						device.connection.readCharacteristic(characteristic)
 				}
 		}) {
 			Text(text = stringResource(id = R.string.read))
@@ -370,13 +379,12 @@ fun ColumnScope.ReadCharacteristicView(
  *
  * @param characteristic
  *   The [Characteristic] to subscribe to notifications from.
- * @param bleConnection
- *   The [BleConnection] to use to read the characteristic.
+ * @param notifyFlow
+ *   The [StateFlow] that provides the most recent notification value.
  */
 @Composable
 fun ColumnScope.NotifyCharacteristicView(
 	characteristic: Characteristic,
-	bleConnection: BleConnection,
 	notifyFlow: StateFlow<ByteArray>)
 {
 	val notifyValue by notifyFlow.collectAsStateWithLifecycle()
@@ -418,58 +426,75 @@ class DeviceViewModel: ViewModel()
 		BleDeviceManager.selectedAdvertisement
 
 	/** The target [BleDevice] to connect to. */
-	private val device: BleDevice by lazy {
+	val device: BleDevice by lazy {
 		val heartService =
 			selectedAdvertisement?.advertisementData?.firstOrNull {
 				it.type == AdvertisingDataType.COMPLETE_16_SERVICE_UUID
 					&& HeartRateBleDevice.isHeartRateDevice(it.data)
 			}
+		val isSampleDevice =
+			selectedAdvertisement?.let {
+				SampleBleDevice.isSampleDevice(it)
+			} == true
 		if (heartService != null)
 		{
 			Log.d("DeviceViewModel", "It's a Heart Rate Monitor!")
-			HeartRateBleDevice(selectedAddress.value, selectedAdvertisement)
+			HeartRateBleDevice(macAddress = selectedAddress.value,
+				bluetoothManager = ExplorerApp.app.bleScanManager.bluetoothManager,
+				context = ExplorerApp.app.baseContext,
+				ioScope = viewModelScope,
+				defaultScope = viewModelScope,
+				advertisement = selectedAdvertisement)
+		}
+		else if (isSampleDevice)
+		{
+			Log.d("DeviceViewModel", "It's a Sample Device!")
+			SampleBleDevice(macAddress = selectedAddress.value,
+				bluetoothManager = ExplorerApp.app.bleScanManager.bluetoothManager,
+				context = ExplorerApp.app.baseContext,
+				ioScope = viewModelScope,
+				defaultScope = viewModelScope,
+				advertisement = selectedAdvertisement)
 		}
 		else
 		{
-			BleDevice(selectedAddress.value, selectedAdvertisement)
+			BleDevice(
+				macAddress = selectedAddress.value,
+				bluetoothManager = ExplorerApp.app.bleScanManager.bluetoothManager,
+				context = ExplorerApp.app.baseContext,
+				ioScope = viewModelScope,
+				defaultScope = viewModelScope,
+				advertisement = selectedAdvertisement
+			)
 		}.apply {
 			BleDeviceManager.devices[macAddress] = this
 		}
 	}
 
-	/**
-	 * The [BleConnection] for the [device].
-	 */
-	val connection: BleConnection =
-		BleConnection(
-			device = device,
-			bluetoothManager = ExplorerApp.app.bleScanManager.bluetoothManager,
-			context = ExplorerApp.app.baseContext,
-			ioScope = viewModelScope,
-			defaultScope = viewModelScope)
-		{
-			Log.d("DeviceViewModel", "~~~~ Device Connected ~~~~")
-		}
-
-	/** The current [ConnectionState] of this [connection]. */
-	val connectionState get() = connection.connectionState
+	/** The current [ConnectionState] of this [device]. */
+	val connectionState get() = device.connectionState
 
 	/**
 	 * The [StateFlow] containing the map of [BluetoothGattService.getUuid] to
 	 * the corresponding [BluetoothGattService].
 	 */
-	val services get() = connection.gattServices
+	val services get() = device.connection.gattServices
 
 	/** [Connect][BleConnection.connect] to the [device] over BLE. */
-	fun connect ()
+	fun connect()
 	{
 		viewModelScope.launch {
-			connection.connect {
-				Log.d(
-					"DeviceViewModel",
-					"~~~~ Device Failed to Connect ~~~~")
+			device.connect(
+				autoConnect = false,
+				prioritySetting = BleConnection.ConnectionPriority.BALANCED,
+				phy = BleConnection.PhysicalLayer.PHY_2M,
+				timeoutAction = {
+					Log.d(
+						"DeviceViewModel",
+						"~~~~ Device Failed to Connect ~~~~")
 
-			}
+				}
+			)
 		}
 	}
 
@@ -480,13 +505,13 @@ class DeviceViewModel: ViewModel()
 	fun disconnect ()
 	{
 		viewModelScope.launch {
-			connection.fullyCloseConnection()
+			device.disconnect()
 		}
 	}
 
 	override fun onCleared()
 	{
-		connection.fullyCloseConnection()
+		device.disconnect()
 		Log.w(
 			"DeviceViewModel",
 			"+++++++++ Has Been Cleared!! ++++++++")

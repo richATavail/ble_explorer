@@ -1,5 +1,7 @@
 package com.bitwisearts.android.explorer.ble.device
 
+import android.bluetooth.BluetoothManager
+import android.content.Context
 import android.util.Log
 import com.bitwisearts.android.ble.BleDevice
 import com.bitwisearts.android.ble.advertisement.Advertisement
@@ -8,6 +10,7 @@ import com.bitwisearts.android.ble.gatt.attribute.CharacteristicChangeNotificati
 import com.bitwisearts.android.ble.gatt.attribute.common.HeartRateMeasurement
 import com.bitwisearts.android.ble.gatt.attribute.common.HeartRateService
 import com.bitwisearts.android.ble.standardUUID
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,9 +23,19 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 class HeartRateBleDevice(
 	macAddress: String,
+	bluetoothManager: BluetoothManager,
+	context: Context,
+	ioScope: CoroutineScope,
+	defaultScope: CoroutineScope,
 	advertisement: Advertisement? = null
-): BleDevice(macAddress, advertisement)
-{
+): BleDevice(
+	macAddress = macAddress,
+	bluetoothManager = bluetoothManager,
+	context = context,
+	ioScope = ioScope,
+	defaultScope = defaultScope,
+	advertisement = advertisement
+) {
 	/**
 	 * The [MutableStateFlow] that contains the most recent heart rate data.
 	 */
@@ -45,7 +58,7 @@ class HeartRateBleDevice(
 
 	companion object
 	{
-		private val TAG = "HeartRateBleDevice"
+		private const val TAG = "HeartRateBleDevice"
 
 		private val notifyHeartRate = listOf(HeartRateMeasurement)
 

@@ -18,6 +18,13 @@
 	<string name="ok">OK</string>
 	<string name="go_to_settings">Go to settings</string>
 	<string name="dismiss">Dismiss</string>
+	<string name="peripheral_mode">Peripheral Mode</string>
+	<string name="central_mode">Central Mode</string>
+
+	<string name="device_type">Device Type:</string>
+	<string name="heart_rate_monitor">Heart Rate Monitor</string>
+	<string name="sample_device">Sample Ble Device</string>
+	<string name="unknown">Unknown</string>
 
 	<string name="properties">Properties</string>
 	<string name="permissions">Permissions</string>
@@ -39,4 +46,7 @@
 	
 	<string name="coarse_location_permission_reason">This is a BLE app, Android version 11 and under requires coarse location permissions to scan for and connect to BLE devices.</string>
 	<string name="coarse_permission_declined">This is a BLE app, Android version 11 and under requires coarse location permissions to scan for and connect to BLE devices. You can set this permission by going to the device settings and granting this permission for this app.</string>
+
+	<string name="advertise_permission_reason">This is a BLE app, it needs permissions to advertise as a BLE peripheral.</string>
+	<string name="advertise_permission_declined">This is a BLE app, it needs permissions to advertise as a BLE peripheral. You can set this permission by going to the device settings and granting this permission for this app.</string>
 </resources>
