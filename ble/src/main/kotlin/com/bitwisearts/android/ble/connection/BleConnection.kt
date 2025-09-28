@@ -34,7 +34,9 @@ import com.bitwisearts.android.ble.request.CharacteristicReadRequest
 import com.bitwisearts.android.ble.request.CharacteristicWriteRequest
 import com.bitwisearts.android.ble.request.DescriptorReadRequest
 import com.bitwisearts.android.ble.request.DescriptorWriteRequest
+import com.bitwisearts.android.ble.request.GeneralDescriptorWriteRequest
 import com.bitwisearts.android.ble.request.EnableNotifyCharacteristicRequest
+import com.bitwisearts.android.ble.request.NotifyDescriptorWriteRequest
 import com.bitwisearts.android.ble.request.ReadRequestResult
 import com.bitwisearts.android.ble.request.WriteRequestResult
 import com.bitwisearts.android.ble.utility.asHex
@@ -235,7 +237,7 @@ open class BleConnection constructor(
 					_connectionState.value = CONNECTION_TIMEOUT
 					timeoutAction()
 					gatt?.close()
-					Log.i("BleConnection", "Connection attempt locally timed out.")
+					Log.i(TAG, "Connection attempt locally timed out.")
 				}
 			}
 		}
@@ -278,7 +280,7 @@ open class BleConnection constructor(
 					request = CharacteristicReadRequest(
 						characteristic.characteristicId
 					) { readValue, status ->
-						Log.d("BleConnection", "Read Status: $status")
+						Log.d(TAG, "Read Status: $status")
 						if (status == KnownGattStatusCode.SUCCESS)
 						{
 							continuation.resume(
@@ -498,13 +500,13 @@ open class BleConnection constructor(
 		timeoutMillis: Long = STANDARD_BLOCKING_REQUEST_TIMEOUT_MS
 	): WriteRequestResult
 	{
-		var request: DescriptorWriteRequest? = null
+		var request: GeneralDescriptorWriteRequest? = null
 		return try
 		{
 			withTimeout(timeoutMillis)
 			{
 				suspendCancellableCoroutine { continuation ->
-					request = DescriptorWriteRequest(
+					request = GeneralDescriptorWriteRequest(
 						identifier = characteristic.descriptorId(descriptor),
 						mtu = mtu,
 						payload = value
@@ -584,7 +586,7 @@ open class BleConnection constructor(
 	)
 	{
 		Log.i(
-			"BleConnection",
+			TAG,
 			"Attempted $bleRequest, but connection status is $state")
 		when (bleRequest)
 		{
@@ -594,10 +596,11 @@ open class BleConnection constructor(
 				bleRequest.complete(null, GattNoConnection)
 			is CharacteristicWriteRequest ->
 				bleRequest.gattResponseHandler(GattNoConnection)
-			is DescriptorWriteRequest ->
-				bleRequest.gattResponseHandler(GattNoConnection)
 			is EnableNotifyCharacteristicRequest ->
 				bleRequest.resultHandler(false, null)
+			is GeneralDescriptorWriteRequest,
+			is NotifyDescriptorWriteRequest ->
+				bleRequest.gattResponseHandler(GattNoConnection)
 		}
 	}
 
@@ -610,10 +613,11 @@ open class BleConnection constructor(
 	 */
 	suspend fun submitBleRequest(bleRequest: BleRequest<*, *>)
 	{
-		Log.d("BleConnection", "Submitting $bleRequest")
+		Log.d(TAG, "Submitting $bleRequest")
 		val state = connectionState.value
 		if (state == CONNECTED || (state == NOTIFICATION_SETUP
-				&& bleRequest is EnableNotifyCharacteristicRequest))
+				&& (bleRequest is EnableNotifyCharacteristicRequest ||
+					bleRequest is NotifyDescriptorWriteRequest)))
 		{
 			bleRequestChannel.send(bleRequest)
 		}
@@ -638,7 +642,10 @@ open class BleConnection constructor(
 				// Normal processing below.
 			}
 			NOTIFICATION_SETUP -> {
-				if (bleRequest !is EnableNotifyCharacteristicRequest)
+				Log.i(TAG, "Notification setup request received.")
+				if (bleRequest !is EnableNotifyCharacteristicRequest &&
+					bleRequest !is NotifyDescriptorWriteRequest
+				)
 				{
 					failRequestNoConnection(bleRequest, state)
 					return
@@ -705,11 +712,13 @@ open class BleConnection constructor(
 					}
 				}
 			}
-			is DescriptorWriteRequest ->
+			is GeneralDescriptorWriteRequest,
+			is NotifyDescriptorWriteRequest ->
 			{
 				mutex.withLock {
 					gatt?.let {
 						val desc = descriptor(bleRequest.identifier)
+						Log.d(TAG, "Descriptor: $desc")
 						if (desc == null)
 						{
 							bleRequest.gattResponseHandler(GattNoConnection)
@@ -722,13 +731,14 @@ open class BleConnection constructor(
 			}
 			is EnableNotifyCharacteristicRequest ->
 			{
+				Log.i(TAG, "Process the enable notify request.")
 				mutex.withLock {
 					gatt?.let {
 						val char = characteristic(bleRequest.identifier)
 						if (char == null)
 						{
 							Log.w(
-								"BleConnection",
+								TAG,
 								"Attempted to enable notify on " +
 									"characteristic, ${bleRequest.identifier}, " +
 									"but characteristic not found.")
@@ -739,18 +749,12 @@ open class BleConnection constructor(
 						if (char.bleCharacteristicProperties
 							.any { p -> p.supportsNotify })
 						{
-							val enabled = it.setCharacteristicNotification(
-								char, true)
-							Log.i(
-								"BleConnection",
-								"Enable notify on characteristic," +
-									"${bleRequest.identifier}, success: $enabled")
-							bleRequest.resultHandler(enabled, null)
+							bleRequest.request(it, char)
 						}
 						else
 						{
 							Log.w(
-								"BleConnection",
+								TAG,
 								"Attempted to enable notify on " +
 									"characteristic, ${bleRequest.identifier}, " +
 									"but characteristic does not support notify.")
@@ -758,7 +762,7 @@ open class BleConnection constructor(
 						}
 					} ?: run {
 						Log.w(
-							"BleConnection",
+							TAG,
 							"Attempted to enable notify on " +
 								"characteristic, ${bleRequest.identifier}, but " +
 								"no BLE connection is available."
@@ -776,7 +780,7 @@ open class BleConnection constructor(
 	{
 		ioScope.launch {
 			val req = bleRequestChannel.receive()
-			Log.d("BleConnection", "Processing $req")
+			Log.d(TAG, "Processing $req (${_connectionState.value})")
 			if(
 				req !is EnableNotifyCharacteristicRequest
 					&& _connectionState.value != CONNECTED
@@ -892,7 +896,8 @@ open class BleConnection constructor(
 		val newConnectionState = BleConnectionState[newState]
 		val previousState = _connectionState.value
 		Log.i(
-			"BLE Connection State Change",
+			TAG,
+			"BLE Connection State Change: " +
 			"${device.logLabel}: " +
 				"New State: $newConnectionState ($newState) " +
 				"Status: ${gattStatusCode.display}\n" +
@@ -911,7 +916,8 @@ open class BleConnection constructor(
 					timeoutJob = null
 					if (_connectionState.value != DISCONNECT_REQUESTED)
 					{
-						Log.i("BLE Connected","Triggering MTU negotiation")
+						Log.i(TAG,
+							"BLE Connected Triggering MTU negotiation")
 						ioScope.launch {
 							delay(200)
 							_connectionState.value = MTU_NEGOTIATION
@@ -922,7 +928,8 @@ open class BleConnection constructor(
 				else
 				{
 					Log.e(
-						"BLE Connection Fail",
+						TAG,
+						"BLE Connection Fail: " +
 						"${device.logLabel}: ${gattStatusCode.display}")
 					_connectionState.value = CONNECTION_FAILED
 				}
@@ -930,14 +937,16 @@ open class BleConnection constructor(
 			CONNECTING ->
 			{
 				Log.i(
-					"BLE Connecting",
+					TAG,
+					"BLE Connecting: " +
 					"${device.logLabel}: ${gattStatusCode.display}")
 				_connectionState.value = CONNECTING
 			}
 			DISCONNECTED ->
 			{
 				Log.i(
-					"BLE Disconnected",
+					TAG,
+					"BLE Disconnected: " +
 					"${device.logLabel}: ${gattStatusCode.display}")
 				if (_connectionState.value == DISCONNECT_REQUESTED)
 				{
@@ -950,7 +959,8 @@ open class BleConnection constructor(
 			DISCONNECTING ->
 			{
 				Log.i(
-					"BLE Disconnecting",
+					TAG,
+					"BLE Disconnecting: " +
 					"${device.logLabel}: ${gattStatusCode.display}")
 				_connectionState.value = DISCONNECTING
 			}
@@ -960,7 +970,8 @@ open class BleConnection constructor(
 			else ->
 			{
 				Log.e(
-					"BLE_Connection_State",
+					TAG,
+					"BLE_Connection_State - " +
 					"State: $newConnectionState ($newState) " +
 						"Status: ${gattStatusCode.display}")
 				_connectionState.value = InvalidConnectionState(status)
@@ -972,8 +983,8 @@ open class BleConnection constructor(
 	override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int)
 	{
 		Log.d(
-			"MTU_CHANGED",
-			"MTU Value: $mtu (${KnownGattStatusCode[status]})")
+			TAG,
+			"MTU Changed, Value: $mtu (${KnownGattStatusCode[status]})")
 		this.mtu =
 			if (status == KnownGattStatusCode.SUCCESS.code)
 				min(mtu - HEADER_ATT_SIZE, ADJUSTED_MAX_MTU_SIZE)
@@ -1001,8 +1012,9 @@ open class BleConnection constructor(
 					val priorityResult = gatt.requestConnectionPriority(
 						prioritySetting.code)
 					Log.d(
-						"BLE_Connection_Priority",
-						"Set connection priority to ${prioritySetting.code}: $priorityResult")
+						TAG,
+						"Set BLE connection priority to " +
+							"${prioritySetting.code}: $priorityResult")
 					val serviceMap = mutableMapOf<UUID, BluetoothGattService>()
 					val charMap = 
 						mutableMapOf<CharacteristicId, BluetoothGattCharacteristic>()
@@ -1029,8 +1041,8 @@ open class BleConnection constructor(
 							gatt.requestConnectionPriority(
 								prioritySetting.code)
 						Log.d(
-							"BLE_Connection_Priority",
-							"Set connection priority to " +
+							TAG,
+							"Set BLE connection priority to " +
 								"${prioritySetting.code}: " +
 								"$prioritySettingResult")
 						// TODO make sure we transition to being fully connected
@@ -1047,7 +1059,7 @@ open class BleConnection constructor(
 						}
 						_connectionState.value = NOTIFICATION_SETUP
 						device.notifyCharacteristics.forEach {
-							Log.d("BleConnection",
+							Log.d(TAG,
 								"Enabling notify for characteristic: $it")
 							submitBleRequest(
 								EnableNotifyCharacteristicRequest(
@@ -1059,6 +1071,7 @@ open class BleConnection constructor(
 										// All notification requests
 										// processed, move to connected
 										// state.
+
 										_connectionState.value = CONNECTED
 										ioScope.launch {
 											afterServicesDiscovered(
@@ -1068,8 +1081,9 @@ open class BleConnection constructor(
 									if (!success)
 									{
 										Log.w(
-											"Enable Notify Failed",
-											"${device.logLabel}: " +
+											TAG,
+											"Enable Notify Failed: " +
+												"${device.logLabel}: " +
 												"Characteristic: $it " +
 												if (status != null)
 												{
@@ -1081,6 +1095,14 @@ open class BleConnection constructor(
 												}
 										)
 									}
+									else
+									{
+										Log.i(
+											TAG,
+											"Enable Notify Success: " +
+												"${device.logLabel}: " +
+												"Characteristic: $it")
+									}
 								}
 							)
 						}
@@ -1091,8 +1113,8 @@ open class BleConnection constructor(
 			else
 			{
 				Log.e(
-					"Fail BLE Services Discovery",
-					"${device.logLabel}: " +
+					TAG,
+					"Fail BLE Services Discovery: ${device.logLabel}: " +
 						KnownGattStatusCode[status].display)
 			}
 		}
@@ -1108,8 +1130,9 @@ open class BleConnection constructor(
 		// change
 		val received = characteristic.value?.clone() ?: ByteArray(0)
 		Log.d(
-			"Characteristic Changed",
-			"${characteristic.uuid}: ${received.asHex}")
+			TAG,
+			"Characteristic Changed: " +
+				"${characteristic.uuid}: ${received.asHex}")
 		ioScope.launch {
 			device.processNotification(
 				CharacteristicChangeNotification(characteristic, received))
@@ -1122,8 +1145,9 @@ open class BleConnection constructor(
 		value: ByteArray)
 	{
 		Log.d(
-			"Characteristic Changed API 33+",
-			"${characteristic.uuid}: ${value.asHex}")
+			TAG,
+			"Characteristic Changed API 33+: " +
+				"${characteristic.uuid}: ${value.asHex}")
 		ioScope.launch {
 			device.processNotification(
 				CharacteristicChangeNotification(characteristic, value))
@@ -1224,14 +1248,15 @@ open class BleConnection constructor(
 				lastDescriptorWriteRequest?.let {
 					val result = KnownGattStatusCode[status]
 					Log.d(
-						"BLE_Descriptor_Write",
-						"${descriptor.uuid}: $result")
+						TAG,
+						"BLE_Descriptor_Write: ${descriptor.uuid}: $result")
 
 					if (result != KnownGattStatusCode.SUCCESS) {
 						// Handle write failure
 						Log.w(
-							"BLE_Descriptor_Write_Failed",
-							"${descriptor.uuid}: $result")
+							TAG,
+							"BLE_Descriptor_Write_Failed: " +
+								"${descriptor.uuid}: $result")
 						if(!it.resendLastPayload(gatt, descriptor)) {
 							defaultScope.launch {
 								it.gattResponseHandler(result)
@@ -1272,9 +1297,9 @@ open class BleConnection constructor(
 			lastCharacterReadRequest?.let {
 				val result = KnownGattStatusCode[status]
 				Log.d(
-					"BLE_Characteristic_Read",
-					"${characteristic.uuid}: ($result) " +
-						(value?.asHex + " No Value Read"))
+					TAG,
+					"BLE_Characteristic_Read: ${characteristic.uuid}: " +
+						"($result) ${(value?.asHex ?: " No Value Read")}")
 				it.complete(value, result)
 			}
 			lastCharacterReadRequest = null
@@ -1301,9 +1326,9 @@ open class BleConnection constructor(
 			lastDescriptorReadRequest?.let {
 				val result = KnownGattStatusCode[status]
 				Log.d(
-					"BLE_Characteristic_Read",
-					"${descriptor.uuid}: ($result) " +
-						(value?.asHex + " No Value Read"))
+					TAG,
+					"BLE_Descriptor_Read: ${descriptor.uuid}: " +
+						"($result) ${(value?.asHex ?: " No Value Read")}")
 				it.complete(value, result)
 			}
 			lastDescriptorReadRequest = null
@@ -1313,6 +1338,8 @@ open class BleConnection constructor(
 
 	companion object
 	{
+		private const val TAG = "BleConnection"
+
 		/**
 		 * The L2CAP Header (Logical Link Control and Adaptation Protocol) is
 		 * the number of bytes that must be accounted for in the MTU; this is

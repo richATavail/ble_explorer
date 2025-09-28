@@ -4,12 +4,12 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
+import android.util.Log
 import com.bitwisearts.android.ble.connection.BleConnection
 import com.bitwisearts.android.ble.gatt.GattStatusCode
 import com.bitwisearts.android.ble.gatt.KnownGattStatusCode
 import com.bitwisearts.android.ble.gatt.attribute.CharacteristicId
 import com.bitwisearts.android.ble.gatt.attribute.bleCharacteristicProperties
-import com.bitwisearts.android.ble.gatt.attribute.common.ClientCharacteristicConfiguration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -38,25 +38,32 @@ class EnableNotifyCharacteristicRequest constructor(
 {
 	override var isComplete: Boolean = false
 
+	init
+	{
+		Log.d(TAG,
+			"Initializing EnableNotifyCharacteristicRequest $identifier")
+	}
+
 	@SuppressLint("MissingPermission")
 	override fun request(
 		gatt: BluetoothGatt,
 		attribute: BluetoothGattCharacteristic)
 	{
+		Log.d(TAG, "Enabling notifications for $attribute")
 		if (attribute.bleCharacteristicProperties.any { it.supportsNotify })
 		{
 			val enabled = gatt.setCharacteristicNotification(attribute, true)
 			if (enabled) {
 				ioScope.launch {
+					Log.d(TAG, "Enabling notifications for $attribute")
 					connection.submitBleRequest(
-						DescriptorWriteRequest(
-							identifier.descriptorId(
-								ClientCharacteristicConfiguration.uuid
-							),
+						NotifyDescriptorWriteRequest(
+							identifier,
 							connection.mtu,
 							BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
 						) { status ->
 							val result = status == KnownGattStatusCode.SUCCESS
+							Log.d(TAG, "Notification enabled: $result ($status)")
 							ioScope.launch {
 								resultHandler(result, status)
 							}
@@ -64,8 +71,27 @@ class EnableNotifyCharacteristicRequest constructor(
 						})
 				}
 			}
-			else resultHandler(false, null)
+			else
+			{
+				Log.d(TAG, "Failed to enable notifications for $attribute")
+				resultHandler(false, null)
+			}
 		}
-		else resultHandler(false, null)
+		else
+		{
+			Log.w(
+				TAG,
+				"Attempted to enable notify on " +
+					"characteristic, $identifier, " +
+					"but characteristic does not support notify."
+			)
+			resultHandler(false, null)
+		}
+	}
+
+	companion object
+	{
+		private const val TAG =
+			"EnableNotifyCharacteristicRequest"
 	}
 }

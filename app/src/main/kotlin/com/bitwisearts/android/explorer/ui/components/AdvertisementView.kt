@@ -22,14 +22,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavController
 import com.bitwisearts.android.ble.advertisement.Advertisement
 import com.bitwisearts.android.ble.advertisement.AdvertisementData
 import com.bitwisearts.android.ble.advertisement.FlagsData
 import com.bitwisearts.android.ble.advertisement.ManufacturerData
 import com.bitwisearts.android.ble.connection.BleDeviceManager
 import com.bitwisearts.android.ble.utility.asCompactHex
-import com.bitwisearts.android.explorer.DeviceRoute
 import com.bitwisearts.android.explorer.R
 import com.bitwisearts.android.explorer.ui.theme.BleExplorerTheme
 import java.util.UUID
@@ -37,16 +35,20 @@ import java.util.UUID
 /**
  * A [Composable] view of an [Advertisement]
  *
- * @param navController
- *   The [NavController] used for app navigation.
  * @param advertisement
  *   The [Advertisement] to display.
+ * @param buttonLabel
+ *   The label to display on the button.
+ * @param onButtonClick
+ *  The function to call when the button is clicked; passing the provided
+ *  [Advertisement].
  */
 @Composable
 fun AdvertisementView (
-	navController: NavController,
-	advertisement: Advertisement)
-{
+	advertisement: Advertisement,
+	buttonLabel: String,
+	onButtonClick: (Advertisement) -> Unit = {},
+) {
 	var isExpanded by remember { mutableStateOf(false) }
 	Column(
 		modifier = Modifier
@@ -60,6 +62,7 @@ fun AdvertisementView (
 		if (isExpanded)
 		{
 			AdvertisementExpandedWithExploreButton(
+				buttonLabel = buttonLabel,
 				address = advertisement.address,
 				deviceName = advertisement.deviceName,
 				rssi = advertisement.rssi,
@@ -71,7 +74,7 @@ fun AdvertisementView (
 				BleDeviceManager.advertisements[advertisement.address] =
 					advertisement
 				BleDeviceManager.selectedAddress.value = advertisement.address
-				DeviceRoute.navigate(navController, advertisement.address)
+				onButtonClick(advertisement)
 			}
 		}
 		else
@@ -122,6 +125,7 @@ fun ColumnScope.AdvertisementCollapsed(
  */
 @Composable
 fun ColumnScope.AdvertisementExpandedWithExploreButton(
+	buttonLabel: String,
 	address: String,
 	deviceName: String,
 	rssi: Int,
@@ -141,7 +145,7 @@ fun ColumnScope.AdvertisementExpandedWithExploreButton(
 		advertisementData
 	)
 	Button(onClick = onButtonClick) {
-		Text(text = stringResource(id = R.string.explore))
+		Text(text = buttonLabel)
 	}
 }
 
@@ -270,13 +274,14 @@ fun AdvertisementExpandedPreview()
 	BleExplorerTheme {
 		Column {
 			AdvertisementExpandedWithExploreButton(
-				"00:11:22:AA:BB:CC",
-				"My Name",
-				-5,
-				10,
-				setOf(UUID.randomUUID(), UUID.randomUUID()),
-				byteArrayOf(0x01, 0x6A, 0xFF.toByte(), 0x44, 0x22, 0x1E),
-				listOf(
+				buttonLabel = "Explore",
+				address = "00:11:22:AA:BB:CC",
+				deviceName = "My Name",
+				rssi = -5,
+				txPower = 10,
+				serviceUUIDs = setOf(UUID.randomUUID(), UUID.randomUUID()),
+				scanRecordBytes = byteArrayOf(0x01, 0x6A, 0xFF.toByte(), 0x44, 0x22, 0x1E),
+				advertisementData = listOf(
 					ManufacturerData(byteArrayOf(3, 4, 22, -44)),
 					FlagsData(byteArrayOf(1, -1, 22, -85)))
 			)

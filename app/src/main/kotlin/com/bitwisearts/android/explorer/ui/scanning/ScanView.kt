@@ -29,6 +29,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.bitwisearts.android.ble.advertisement.Advertisement
+import com.bitwisearts.android.explorer.DeviceRoute
 import com.bitwisearts.android.explorer.ExplorerApp
 import com.bitwisearts.android.explorer.R
 import com.bitwisearts.android.explorer.ble.ExplorerScan
@@ -100,7 +101,13 @@ fun ScannerView (
 				}
 			}
 		}
-		Advertisements(navController, viewModel.scanRequest.found)
+		Advertisements(
+			buttonLabel = stringResource(id = R.string.explore),
+			viewModel.scanRequest.found
+		) { advertisement ->
+			DeviceRoute.navigate(
+				navController, advertisement.address)
+		}
 	}
 }
 
@@ -108,20 +115,28 @@ fun ScannerView (
  * The [Composable] that lists all the [Advertisement]s that have been
  * discovered via a BLE Scan.
  *
- * @param navController
- *   The [NavController] used for navigation.
+ * @param buttonLabel
+ *   The label to display on the button.
  * @param advertisements
  *   The list of [Advertisement]s to add to the screen.
+ * @param onButtonClick
+ *  The function to call when the button is clicked; passing the provided
+ *  [Advertisement].
  */
 @Composable
 fun Advertisements(
-	navController: NavController,
-	advertisements: List<Advertisement>)
-{
+	buttonLabel: String,
+	advertisements: List<Advertisement>,
+	onButtonClick: (Advertisement) -> Unit = {}
+) {
 	LazyColumn(modifier = Modifier.padding(start = 18.dp))
 	{
 		items(advertisements) {
-			AdvertisementView(navController, it)
+			AdvertisementView(
+				buttonLabel = buttonLabel,
+				advertisement = it,
+				onButtonClick = onButtonClick
+			)
 		}
 	}
 }

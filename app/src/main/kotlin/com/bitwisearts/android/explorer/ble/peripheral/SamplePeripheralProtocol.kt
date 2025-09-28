@@ -1,5 +1,6 @@
 package com.bitwisearts.android.explorer.ble.peripheral
 
+import android.util.Log
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 
@@ -73,7 +74,7 @@ class Message(
 			val messageLength = rawMessageBytes.size + messageIdBytes.size
 			val sizePrefixBytes = serializeUnsignedInt(messageLength)
 			writeBytes(sizePrefixBytes)
-			writeBytes(serializeUnsignedInt(messageLength))
+//			writeBytes(serializeUnsignedInt(messageLength))
 			writeBytes(serializeUnsignedInt(id))
 			writeBytes(message.toByteArray())
 			return output.toByteArray()
@@ -122,6 +123,8 @@ class MessageDeserializer(initialPayload: ByteArray)
 	init
 	{
 		val (sizePrefix, remaining) = readSizePrefix(initialPayload)
+		Log.d(TAG, "Size prefix: $sizePrefix")
+		Log.d(TAG, "Remaining: ${remaining.size} bytes")
 		messageSize = sizePrefix
 		messageInputStream.write(remaining)
 	}
@@ -140,6 +143,11 @@ class MessageDeserializer(initialPayload: ByteArray)
 	 * bytes are still expected.
 	 */
 	val hasAllBytes: Boolean get() = messageInputStream.size() == messageSize
+
+	/**
+	 * The number of bytes that have been received so far for this message.
+	 */
+	val currentReceivedBytes: Int get() = messageInputStream.size()
 
 	/**
 	 * Deserializes and answer the complete [Message] from the accumulated
@@ -165,6 +173,8 @@ class MessageDeserializer(initialPayload: ByteArray)
 
 	companion object
 	{
+		private const val TAG = "MessageDeserializer"
+
 		/**
 		 * Reads the size prefix from the initial payload of a message. The size
 		 * prefix indicates the total length of the message, including the size
@@ -178,16 +188,19 @@ class MessageDeserializer(initialPayload: ByteArray)
 		 *   the second element is the remaining [ByteArray] after the size
 		 *   prefix has been read.
 		 */
-		private fun readSizePrefix(
+		fun readSizePrefix(
 			initialPayload: ByteArray
 		): Pair<Int, ByteArray>
 		{
 			val input = ByteArrayInputStream(initialPayload)
-			return (
-				readUnsignedInt(input) to
-					initialPayload.slice(
-						input.available() until
-						initialPayload.size).toByteArray())
+			val sizePrefix = readUnsignedInt(input)
+			Log.d(TAG, "Read size prefix: $sizePrefix")
+			// The size prefix includes itself in the count, so we subtract the
+			// bytes we just read.
+			val remaining = initialPayload.slice(
+				initialPayload.size - input.available() until
+					initialPayload.size).toByteArray()
+			return sizePrefix to remaining
 		}
 	}
 }

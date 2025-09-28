@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattDescriptor
 import android.os.Build
+import android.util.Log
 import com.bitwisearts.android.ble.connection.BleConnection
 import com.bitwisearts.android.ble.gatt.GattStatusCode
 import com.bitwisearts.android.ble.gatt.attribute.DescriptorId
@@ -32,7 +33,7 @@ import com.bitwisearts.android.ble.gatt.attribute.DescriptorId
  *   The suspend lambda that accepts the [GattStatusCode] responsible for
  *   handling the response to this [DescriptorWriteRequest].
  */
-class DescriptorWriteRequest constructor (
+sealed class DescriptorWriteRequest constructor (
 	override val identifier: DescriptorId,
 	mtu: Int,
 	payload: ByteArray,
@@ -46,17 +47,20 @@ class DescriptorWriteRequest constructor (
 		gatt: BluetoothGatt,
 		attribute: BluetoothGattDescriptor)
 	{
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-		{
-			gatt.writeDescriptor(attribute, next())
-		}
-		else
-		{
-			@Suppress("DEPRECATION")
-			attribute.value = next()
-			@Suppress("DEPRECATION")
-			gatt.writeDescriptor(attribute)
-		}
+		val result =
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+			{
+				gatt.writeDescriptor(attribute, next())
+
+			}
+			else
+			{
+				@Suppress("DEPRECATION")
+				attribute.value = next()
+				@Suppress("DEPRECATION")
+				gatt.writeDescriptor(attribute)
+			}
+		Log.d("BleConnection", "Descriptor Write Status: $result")
 	}
 
 	/**

@@ -894,7 +894,9 @@ class SampleBlePeripheral(
 				offset,
 				value
 			)
-
+			Log.d(TAG,
+				"Descriptor write request from ${device?.address} for " +
+					"${descriptor?.uuid}, value: ${value?.contentToString()}")
 			try
 			{
 				if (descriptor?.uuid == ClientCharacteristicConfiguration.uuid)

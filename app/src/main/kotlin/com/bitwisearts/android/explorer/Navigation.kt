@@ -23,6 +23,7 @@ import androidx.navigation.compose.rememberNavController
 import com.bitwisearts.android.explorer.ble.peripheral.SampleBlePeripheral
 import com.bitwisearts.android.explorer.ui.connected.DeviceView
 import com.bitwisearts.android.explorer.ui.connected.DevicesView
+import com.bitwisearts.android.explorer.ui.peripheral.CentralView
 import com.bitwisearts.android.explorer.ui.peripheral.PeripheralView
 import com.bitwisearts.android.explorer.ui.scanning.ScannerView
 
@@ -174,7 +175,7 @@ fun AppNavigationGraph(
 		}
 		composable(BottomNavRoute.PeripheralCentralRoute.route)
 		{
-			// TODO
+			CentralView()
 		}
 	}
 }

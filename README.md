@@ -3,9 +3,9 @@ BLE Explorer
 
 This is a refresher exploration of BLE utilizing patterns I have used in the
 past, but adding new types for managing received data such as Kotlin Flows. I 
-have been tinkering with this locally on my computer (**not in git**) for a few 
-months now. This is currently a work-in-progress. I have been updating the 
-codebase as libraries have been updated. 
+have been tinkering with this on and off for a few years. This is currently a 
+work-in-progress. I have been updating the codebase as libraries have been 
+updated. 
 
 **NOTE** This is definitely not a hardened app.
 
@@ -53,9 +53,30 @@ As of right now it:
       - Supports resending on failure up to a configurable max retry count
     - Subscribes to notifications (_untested_)
       - [EnableNotifyCharacteristicRequest](ble/src/main/kotlin/com/bitwisearts/android/ble/request/EnableNotifyCharacteristicRequest.kt)
-- BLE Device representation ([BleDevice](ble/src/main/kotlin/com/bitwisearts/android/ble/BleDevice.kt))
+- BLE Device representation ([BleDevice](ble/src/main/kotlin/com/bitwisearts/android/ble/BleDevice.kt)) - the Central's representation of 
+  a Peripheral; this is the place to start exploring as any interaction with a
+  Peripheral should be done through a subclass of `BleDevice`.
 - Provides some common BLE Attributes (see [attributes](ble/src/main/kotlin/com/bitwisearts/android/ble/gatt/attribute/common))
-- A test [app](app) UI to interact with devices
+- A test [app](app) UI to interact with devices that demonstrates the following 
+  functionality:
+  - Scanning
+  - Scan results
+  - Connecting to a device
+  - Connection state changes
+  - MTU changes
+  - Services discovered
+  - Sample Communication between a
+    [SampleBlePeripheral](app/src/main/kotlin/com/bitwisearts/android/explorer/ble/peripheral/SampleBlePeripheral.kt)
+    via Ble Peripheral screen and a
+    [SampleBleDevice](app/src/main/kotlin/com/bitwisearts/android/explorer/ble/peripheral/SampleBleDevice.kt),
+    which is an implementation of a `BleDevice`, via Sample Peripherals view. 
+    This demonstrates:
+      - Scanning for a specific device type using a service UUID filter
+      - Connection
+      - Read Characteristics
+      - Write Characteristics
+      - Notifications using the [SamplePeripheralProtocol](app/src/main/kotlin/com/bitwisearts/android/explorer/ble/peripheral/SamplePeripheralProtocol.kt)
+      - Disconnecting
 
 **ANOTHER NOTE** Development is slow moving here, not everything is perfect or
 necessarily even "good". 

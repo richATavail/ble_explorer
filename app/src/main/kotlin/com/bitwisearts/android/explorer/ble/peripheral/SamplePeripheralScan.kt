@@ -34,10 +34,7 @@ class SamplePeripheralScan constructor(
 	override val scanFilters: List<ScanFilter> =
 		listOf(
 			ScanFilter.Builder()
-				.setServiceData(
-					SampleBleService.asParcelUuid,
-					byteArrayOf()
-				)
+				.setServiceUuid(SampleBleService.asParcelUuid)
 				.build()
 		)
 

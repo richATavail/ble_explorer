@@ -3,6 +3,7 @@ package com.bitwisearts.android.ble
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.Context
+import android.util.Log
 import com.bitwisearts.android.ble.advertisement.Advertisement
 import com.bitwisearts.android.ble.connection.BleConnection
 import com.bitwisearts.android.ble.connection.BleConnection.ConnectionPriority
@@ -18,7 +19,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * A Bluetooth Low Energy (BLE) peripheral.
+ * A Bluetooth Low Energy (BLE) peripheral. This represents the Central's view
+ * of the remote peripheral device. It contains the [BleConnection] to the
+ * remote device as well as any [Advertisement] received from the remote device.
+ *
+ * This is the core class for interacting with a BLE peripheral device. Any
+ * custom requirements for a specific peripheral should be implemented by
+ * subclassing this [BleDevice] class.
  *
  * @author Richard Arriaga
  *
@@ -36,7 +43,6 @@ open class BleDevice constructor(
 	defaultScope: CoroutineScope,
 	var advertisement: Advertisement? = null)
 {
-
 
 	/** Helper for creating a identifying label for logging purposes. */
 	val logLabel: String get() =
@@ -72,6 +78,7 @@ open class BleDevice constructor(
 	 */
 	open fun processNotification (notification: CharacteristicChangeNotification)
 	{
+		Log.d(TAG, "Received notification")
 		// Do nothing by default
 	}
 
@@ -160,5 +167,10 @@ open class BleDevice constructor(
 	fun disconnect()
 	{
 		connection.fullyCloseConnection()
+	}
+
+	companion object
+	{
+		private const val TAG = "BleDevice"
 	}
 }

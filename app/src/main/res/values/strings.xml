@@ -11,6 +11,7 @@
 	<string name="connect">Connect</string>
 	<string name="disconnect">Disconnect</string>
 	<string name="ble_devices">BLE Devices</string>
+	<string name="sample_peripherals">Sample Peripherals</string>
 	<string name="scan">Scan</string>
 	<string name="rssi">RSSI</string>
 	<string name="read">Read</string>
@@ -20,6 +21,9 @@
 	<string name="dismiss">Dismiss</string>
 	<string name="peripheral_mode">Peripheral Mode</string>
 	<string name="central_mode">Central Mode</string>
+	<string name="status">Status:</string>
+
+	<string name="no_device">No Device</string>
 
 	<string name="device_type">Device Type:</string>
 	<string name="heart_rate_monitor">Heart Rate Monitor</string>
