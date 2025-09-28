@@ -41,17 +41,17 @@ As of right now it:
     - [BleRequestResult](ble/src/main/kotlin/com/bitwisearts/android/ble/request/BleRequestResult.kt)
     - Reads characteristics
       - [CharacteristicReadRequest](ble/src/main/kotlin/com/bitwisearts/android/ble/request/CharacteristicReadRequest.kt) 
-    - Writes characteristics (_untested_)
+    - Writes characteristics
       - [CharacteristicWriteRequest](ble/src/main/kotlin/com/bitwisearts/android/ble/request/CharacteristicWriteRequest.kt) 
       - Supports chunking for large writes
       - Supports resending on failure up to a configurable max retry count
     - Reads descriptors
       - [DescriptorReadRequest](ble/src/main/kotlin/com/bitwisearts/android/ble/request/DescriptorReadRequest.kt)
-    - Writes descriptors (_untested_)
+    - Writes descriptors
       - [DescriptorWriteRequest](ble/src/main/kotlin/com/bitwisearts/android/ble/request/DescriptorWriteRequest.kt)
       - Supports chunking for large writes
       - Supports resending on failure up to a configurable max retry count
-    - Subscribes to notifications (_untested_)
+    - Subscribes to notifications
       - [EnableNotifyCharacteristicRequest](ble/src/main/kotlin/com/bitwisearts/android/ble/request/EnableNotifyCharacteristicRequest.kt)
 - BLE Device representation ([BleDevice](ble/src/main/kotlin/com/bitwisearts/android/ble/BleDevice.kt)) - the Central's representation of 
   a Peripheral; this is the place to start exploring as any interaction with a
