@@ -9,6 +9,9 @@ updated.
 
 **NOTE** This is definitely not a hardened app.
 
+**NOTE** This is not to demonstrate best practices of UI/UX design nor a model
+app for Jetpack Compose usage; just enough to demonstrate the BLE functionality.
+
 **NOTE** There is no road map for this project.
 
 As of right now it:
@@ -78,5 +81,4 @@ As of right now it:
       - Notifications using the [SamplePeripheralProtocol](app/src/main/kotlin/com/bitwisearts/android/explorer/ble/peripheral/SamplePeripheralProtocol.kt)
       - Disconnecting
 
-**ANOTHER NOTE** Development is slow moving here, not everything is perfect or
-necessarily even "good". 
+**ANOTHER NOTE** Development is slow moving here, not everything is perfect
