@@ -71,6 +71,7 @@ sealed class BleWriteRequest<Attribute, Id: AttributeId> constructor (
 		if (payload.size <= mtu)
 		{
 			startIndexOfNextSend = payload.size
+			bytesLastSent = payload
 			return payload
 		}
 		val nextEndIndexExclusive =
