@@ -1,8 +1,10 @@
+import com.android.build.api.dsl.LibraryExtension
+
 plugins {
 	alias(libs.plugins.android.library)
 }
 
-android {
+configure<LibraryExtension> {
 	namespace = "com.bitwisearts.android.ble"
 	compileSdk = 36
 
@@ -10,7 +12,6 @@ android {
 		minSdk = 28
 
 		testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-//		consumerProguardFiles = "consumer-rules.pro"
 	}
 
 	buildTypes {
@@ -23,9 +24,10 @@ android {
 		sourceCompatibility = JavaVersion.VERSION_17
 		targetCompatibility = JavaVersion.VERSION_17
 	}
-	kotlin {
-		jvmToolchain(17)
-	}
+}
+
+kotlin {
+	jvmToolchain(17)
 }
 
 dependencies {
