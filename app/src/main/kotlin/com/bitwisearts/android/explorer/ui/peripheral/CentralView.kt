@@ -46,7 +46,6 @@ import com.bitwisearts.android.ble.connection.BleDeviceManager
 import com.bitwisearts.android.ble.connection.ConnectionState
 import com.bitwisearts.android.explorer.ExplorerApp
 import com.bitwisearts.android.explorer.R
-import com.bitwisearts.android.explorer.ble.ExplorerScan
 import com.bitwisearts.android.explorer.ble.peripheral.SampleBleDevice
 import com.bitwisearts.android.explorer.ble.peripheral.SamplePeripheralScan
 import com.bitwisearts.android.explorer.ui.scanning.Advertisements
@@ -90,6 +89,27 @@ fun CentralView(
 	}
 }
 
+/**
+ * Composable that displays the scanning interface for discovering BLE
+ * peripherals in Central mode. This view shows a list of discovered devices
+ * and provides controls to start/stop scanning.
+ *
+ * The view:
+ * - Shows a scan button or progress indicator based on scanning state
+ * - Displays discovered advertisements in a list
+ * - Allows users to select and connect to discovered peripherals
+ * - Automatically stops scanning when the view is no longer visible
+ *
+ * @param modifier
+ *   The [Modifier] to be applied to this Composable.
+ * @param lifecycleOwner
+ *   The [LifecycleOwner] used to observe lifecycle events and manage scanning
+ *   behavior based on the lifecycle state.
+ * @param viewModel
+ *   The [CentralViewModel] that provides the data and behavior for this view.
+ *
+ * @author Richard Arriaga
+ */
 @Composable
 private fun CentralScanView(
 	modifier: Modifier = Modifier,
@@ -169,6 +189,29 @@ private fun CentralScanView(
 	}
 }
 
+/**
+ * Composable that displays the device interaction interface when connected
+ * to a BLE peripheral in Central mode. This view provides controls for:
+ * - Viewing the connection state
+ * - Reading characteristic values from the peripheral
+ * - Writing data to peripheral characteristics
+ * - Receiving and displaying notifications from the peripheral
+ * - Connecting/disconnecting from the peripheral
+ *
+ * The view automatically disconnects from the device when no longer visible
+ * to ensure proper resource cleanup.
+ *
+ * @param modifier
+ *   The [Modifier] to be applied to this Composable.
+ * @param lifecycleOwner
+ *   The [LifecycleOwner] used to observe lifecycle events and manage the
+ *   connection lifecycle.
+ * @param viewModel
+ *   The [CentralViewModel] that provides the device data and interaction
+ *   methods.
+ *
+ * @author Richard Arriaga
+ */
 @Composable
 fun CentralDeviceView(
 	modifier: Modifier = Modifier,
@@ -351,7 +394,16 @@ fun CentralDeviceView(
 }
 
 /**
- * The [ViewModel]
+ * The [ViewModel] for the Central role UI. This ViewModel manages the state
+ * and behavior when the Android device acts as a BLE Central, allowing it to:
+ * - Scan for advertising BLE peripherals
+ * - Connect to discovered BLE peripherals
+ * - Interact with connected peripheral devices by reading/writing characteristics
+ * - Receive notifications from peripheral devices
+ *
+ * The ViewModel maintains two primary views:
+ * 1. Scan View - For discovering and selecting peripherals to connect to
+ * 2. Device View - For interacting with a connected peripheral device
  *
  * @author Richard Arriaga
  */
@@ -369,19 +421,25 @@ class CentralViewModel: ViewModel()
 	val bluetoothEnabled get() = ExplorerApp.app.bleScanManager.isBleIsEnabled
 
 	private val _showScanView = MutableStateFlow(true)
+
 	/**
 	 * `true` indicates the Scan View should be shown; `false` indicates the
 	 * connected device view should be shown.
 	 */
 	val showScanView get() = _showScanView.asStateFlow()
 
-	/** Toggle the view to show the scan view. */
+	/**
+	 * Toggle the view to show the scan view for discovering BLE peripherals.
+	 */
 	fun toggleScanView ()
 	{
 		_showScanView.value = true
 	}
 
-	/** Toggle the view to show the connected device view. */
+	/**
+	 * Toggle the view to show the connected device view for interacting with
+	 * a connected BLE peripheral.
+	 */
 	fun toggleDeviceView ()
 	{
 		_showScanView.value = false
@@ -391,7 +449,11 @@ class CentralViewModel: ViewModel()
 	//                             Device Scan						          //
 	////////////////////////////////////////////////////////////////////////////
 
-	/** The [ExplorerScan] used for scanning for BLE devices. */
+	/**
+	 * The [SamplePeripheralScan] used for scanning for BLE devices that
+	 * advertise the sample peripheral service. The scan runs for 4 seconds
+	 * and does not allow duplicate advertisements during the scan period.
+	 */
 	val scanRequest = SamplePeripheralScan(
 		4000,
 		false,
@@ -406,12 +468,20 @@ class CentralViewModel: ViewModel()
 	 */
 	val isScanning get() = ExplorerApp.app.bleScanManager.isScanning
 
-	/** Start a BLE scan. */
+	/**
+	 * Start a BLE scan to discover advertising peripherals. The scan will
+	 * run for the duration specified in [scanRequest] and discovered devices
+	 * will be added to the scan request's found list.
+	 */
 	fun startScan ()
 	{
 		ExplorerApp.app.bleScanManager.requestScan(scanRequest)
 	}
 
+	/**
+	 * Cancel the currently running BLE scan if one is active. This stops
+	 * the scan before its normal duration expires.
+	 */
 	fun cancelScan ()
 	{
 		viewModelScope.launch {
@@ -425,15 +495,15 @@ class CentralViewModel: ViewModel()
 
 	/**
 	 * The [mac address][BleDevice.macAddress] of the presently selected device
-	 * or an empty string if no  device selected. It is expected that this is
-	 * actually populated with a mac address if we have gotten to this screen.
+	 * or an empty string if no device selected. It is expected that this
+	 * contains a valid MAC address when the device view is displayed.
 	 */
 	val selectedAddress get() = BleDeviceManager.selectedAddress
 
 	/**
 	 * The [Advertisement] of the presently selected device or `null` if no
-	 * device selected. It is expected that this is actually not `null` if we have gotten to this
-	 * screen.
+	 * device selected. It is expected that this is not `null` when the device
+	 * view is displayed.
 	 */
 	val selectedAdvertisement: Advertisement? get() =
 		BleDeviceManager.selectedAdvertisement
@@ -442,16 +512,20 @@ class CentralViewModel: ViewModel()
 		MutableStateFlow(null)
 
 	/**
-	 * The presently selected [BleDevice] or `null` if no device selected. It is
-	 * expected that this is actually not `null` if we have gotten to this
-	 * screen.
+	 * The presently selected [SampleBleDevice] or `null` if no device selected.
+	 * This represents the BLE device that the central is currently interacting
+	 * with or attempting to connect to. It is expected that this is not `null`
+	 * when the device view is displayed.
 	 */
 	val selectedDevice: StateFlow<SampleBleDevice?> =
 		_selectedDevice.asStateFlow()
 
 	/**
-	 * Set the presently selected [BleDevice] based on the
-	 * [selectedAddress] and [selectedAdvertisement].
+	 * Set the presently selected [SampleBleDevice] based on the
+	 * [selectedAddress] and [selectedAdvertisement]. This creates a new
+	 * [SampleBleDevice] instance and registers it with the [BleDeviceManager].
+	 * This should be called after a user selects a device from the scan results
+	 * and before attempting to connect.
 	 */
 	fun setSelectedDevice ()
 	{
@@ -467,24 +541,48 @@ class CentralViewModel: ViewModel()
 			}
 	}
 
-	/** Clear the presently selected device. */
+	/**
+	 * Clear the presently selected device, setting [selectedDevice] to `null`.
+	 * This should be called when navigating away from the device view or after
+	 * disconnecting from a device.
+	 */
 	fun clearSelectedDevice ()
 	{
 		_selectedDevice.value = null
 	}
 
+	/**
+	 * Helper property to get the non-null [selectedDevice]. This will throw
+	 * a [NullPointerException] if accessed when [selectedDevice] is `null`,
+	 * so it should only be used after confirming a device is selected.
+	 */
 	private val device get() = selectedDevice.value!!
 
-	/** The current [ConnectionState] of this [device]. */
+	/**
+	 * The current [ConnectionState] of the [selectedDevice]. This flow emits
+	 * updates as the connection state changes (e.g., CONNECTING, CONNECTED,
+	 * DISCONNECTED).
+	 */
 	val connectionState get() = device.connectionState
 
 	/**
 	 * The [StateFlow] containing the map of [BluetoothGattService.getUuid] to
-	 * the corresponding [BluetoothGattService].
+	 * the corresponding [BluetoothGattService] for the connected device. This
+	 * is populated after service discovery completes following a successful
+	 * connection.
 	 */
 	val services get() = device.connection.gattServices
 
-	/** [Connect][BleConnection.connect] to the [device] over BLE. */
+	/**
+	 * [Connect][BleConnection.connect] to the [selectedDevice] over BLE.
+	 * This initiates a connection attempt using:
+	 * - Auto-connect disabled (direct connection)
+	 * - Balanced connection priority
+	 * - 2M PHY for higher throughput
+	 *
+	 * The connection will timeout if not established within the default
+	 * timeout period.
+	 */
 	fun connect()
 	{
 		viewModelScope.launch {
@@ -502,8 +600,9 @@ class CentralViewModel: ViewModel()
 	}
 
 	/**
-	 * Disconnect [disconnect][BleConnection.fullyCloseConnection] from the
-	 * [device].
+	 * Disconnect from the [selectedDevice]. This fully closes the BLE
+	 * connection and releases all associated resources. After disconnection,
+	 * a new connection attempt can be initiated if desired.
 	 */
 	fun disconnect ()
 	{

@@ -1,34 +1,82 @@
 package com.bitwisearts.android.ble.utility
 
-/** This [Byte] as a binary string. For example: `10100101` */
+/**
+ * Converts this [Byte] to a binary string representation with 8 digits,
+ * padding with leading zeros if necessary.
+ *
+ * Example: The byte value 165 (0xA5) returns `"10100101"`
+ *
+ * @return
+ *   An 8-character string representing the binary value of this byte.
+ */
 val Byte.asBinary: String get() =
 	toUByte().toString(2).padStart(8, '0')
 
-/** This [Byte] as a hex encoded string. For example `2A`. */
+/**
+ * Converts this [Byte] to a two-character uppercase hexadecimal string,
+ * padding with a leading zero if necessary.
+ *
+ * Example: The byte value 42 returns `"2A"`
+ *
+ * @return
+ *   A 2-character uppercase hex string representation of this byte.
+ */
 val Byte.asHex: String get() =
 	java.lang.String.format("%02X", this)
 
-/** This [Byte] as a literal hex encoded string. For example `0x2A` */
+/**
+ * Converts this [Byte] to a hexadecimal string prefixed with "0x",
+ * padding with a leading zero if necessary.
+ *
+ * Example: The byte value 42 returns `"0x2A"`
+ *
+ * @return
+ *   A hex string with "0x" prefix representing this byte.
+ */
 val Byte.asLiteralHex: String get() =
 	java.lang.String.format("0x%02X", this)
 
 /**
- * This [ByteArray] as a [hex-encoded][asHex] string with spaces between each
- * [hex][asHex] byte.
+ * Converts this [ByteArray] to a space-separated hexadecimal string where
+ * each byte is represented as a two-character uppercase hex value.
+ *
+ * Example: `byteArrayOf(0x01, 0x6A, 0xFF.toByte())` returns `"01 6A FF"`
+ *
+ * This format is useful for displaying byte arrays in a human-readable form.
+ *
+ * @return
+ *   A space-separated hex string representation of this byte array.
  */
 val ByteArray.asHex: String get() =
 	this.map { it.asHex }.joinToString(" ") { it }
 
 /**
- * This [ByteArray] as a [hex-encoded][asHex] string with no spaces between each
- * [hex][asHex] byte.
+ * Converts this [ByteArray] to a compact hexadecimal string with no spaces
+ * between bytes, where each byte is represented as a two-character uppercase
+ * hex value.
+ *
+ * Example: `byteArrayOf(0x01, 0x6A, 0xFF.toByte())` returns `"016AFF"`
+ *
+ * This format is useful for compact hex representations and parsing.
+ *
+ * @return
+ *   A compact (no spaces) hex string representation of this byte array.
  */
 val ByteArray.asCompactHex: String get() =
 	this.map { it.asHex }.joinToString("") { it }
 
 /**
- * This [ByteArray] as a [binary string][asBinary] of bytes with a space in
- * between each byte. Each line will be at most be 78 characters long.
+ * Converts this [ByteArray] to a binary string representation where each byte
+ * is shown as an 8-digit binary value, with spaces between bytes. Lines are
+ * automatically wrapped to a maximum of 78 characters (7 bytes per line plus
+ * spaces).
+ *
+ * Example: `byteArrayOf(0xFF.toByte(), 0x00)` returns `"11111111 00000000"`
+ *
+ * This format is useful for bit-level analysis and debugging.
+ *
+ * @return
+ *   A space-separated binary string with automatic line wrapping.
  */
 @Suppress("unused")
 val ByteArray.asBinary: String get() =
@@ -44,16 +92,32 @@ val ByteArray.asBinary: String get() =
 	}
 
 /**
+ * Converts this [ByteArray] to a space-separated hexadecimal string where
+ * each byte is prefixed with "0x" and represented as a two-character
+ * uppercase hex value.
+ *
+ * Example: `byteArrayOf(0x01, 0x2A)` returns `"0x01 0x2A"`
+ *
  * @return
- *   This [ByteArray] as a literal [hex-encoded][asLiteralHex] string.
+ *   A space-separated hex string with "0x" prefixes for each byte.
  */
 @Suppress("unused")
 val ByteArray.asLiteralHex: String get() =
 	this.map { it.asLiteralHex }.joinToString(" ") { it }
 
 /**
+ * Interprets this [ByteArray] as a little-endian encoded [Int] value. The
+ * first byte is treated as the least significant byte, and subsequent bytes
+ * as progressively more significant.
+ *
+ * Example: `byteArrayOf(0x01, 0x02, 0x00, 0x00)` returns `513` (0x00000201)
+ *
+ * **Note:** This assumes the byte array contains at most 4 bytes. If the
+ * array is longer, only the first 4 bytes are used. If shorter, the remaining
+ * higher-order bytes are treated as zero.
+ *
  * @return
- *   This [ByteArray] interpreted as a little-endian [Int].
+ *   The integer value represented by this byte array in little-endian format.
  */
 val ByteArray.asInt: Int get() =
 	this.foldIndexed(0) { index, acc, byte ->
@@ -61,8 +125,18 @@ val ByteArray.asInt: Int get() =
 	}
 
 /**
+ * Interprets this [ByteArray] as a big-endian encoded [Int] value. The
+ * first byte is treated as the most significant byte, and subsequent bytes
+ * as progressively less significant.
+ *
+ * Example: `byteArrayOf(0x00, 0x00, 0x02, 0x01)` returns `513` (0x00000201)
+ *
+ * **Note:** This assumes the byte array contains at most 4 bytes. If the
+ * array is longer, only the first 4 bytes are used. If shorter, the remaining
+ * higher-order bytes are treated as zero.
+ *
  * @return
- *   This [ByteArray] interpreted as a big-endian [Int].
+ *   The integer value represented by this byte array in big-endian format.
  */
 val ByteArray.asBigEndianInt: Int get() =
 	this.reversedArray().foldIndexed(0) { index, acc, byte ->

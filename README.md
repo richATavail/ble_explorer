@@ -59,6 +59,19 @@ As of right now it:
 - BLE Device representation ([BleDevice](ble/src/main/kotlin/com/bitwisearts/android/ble/BleDevice.kt)) - the Central's representation of 
   a Peripheral; this is the place to start exploring as any interaction with a
   Peripheral should be done through a subclass of `BleDevice`.
+- BLE Peripheral support - allows Android device to act as a BLE Peripheral (GATT Server)
+  - [BaseBlePeripheral](ble/src/main/kotlin/com/bitwisearts/android/ble/peripheral/BaseBlePeripheral.kt) - Abstract base class for creating a BLE Peripheral
+    - Handles BLE advertising with customizable settings
+    - Manages GATT server setup and lifecycle
+    - Supports multiple client connections
+    - Handles characteristic read/write requests
+    - Supports notifications/indications to subscribed clients
+    - Performs MTU negotiation
+    - Permission checking
+  - [PeripheralService](ble/src/main/kotlin/com/bitwisearts/android/ble/peripheral/PeripheralService.kt) - Service definition for peripherals
+  - [PeripheralCharacteristic](ble/src/main/kotlin/com/bitwisearts/android/ble/peripheral/PeripheralCharacteristic.kt) - Characteristic with managed state
+  - [PeripheralLog](ble/src/main/kotlin/com/bitwisearts/android/ble/peripheral/PeripheralLog.kt) - Tracks peripheral operations for debugging
+  - [SendDataRequest](ble/src/main/kotlin/com/bitwisearts/android/ble/peripheral/SendDataRequest.kt) - Handles chunking for large notification payloads
 - Provides some common BLE Attributes (see [attributes](ble/src/main/kotlin/com/bitwisearts/android/ble/gatt/attribute/common))
 - A test [app](app) UI to interact with devices that demonstrates the following 
   functionality:
@@ -70,9 +83,9 @@ As of right now it:
   - Services discovered
   - Sample Communication between a
     [SampleBlePeripheral](app/src/main/kotlin/com/bitwisearts/android/explorer/ble/peripheral/SampleBlePeripheral.kt)
-    via Ble Peripheral screen and a
-    [SampleBleDevice](app/src/main/kotlin/com/bitwisearts/android/explorer/ble/peripheral/SampleBleDevice.kt),
-    which is an implementation of a `BleDevice`, via Sample Peripherals view. 
+    (extends `BaseBlePeripheral`) via the Peripheral screen and a
+    [SampleBleDevice](app/src/main/kotlin/com/bitwisearts/android/explorer/ble/peripheral/SampleBleDevice.kt)
+    (extends `BleDevice`) via the Central screen. 
     This demonstrates:
       - Scanning for a specific device type using a service UUID filter
       - Connection

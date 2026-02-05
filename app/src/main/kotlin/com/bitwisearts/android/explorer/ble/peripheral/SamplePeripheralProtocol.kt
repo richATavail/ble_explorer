@@ -1,6 +1,7 @@
 package com.bitwisearts.android.explorer.ble.peripheral
 
 import android.util.Log
+import com.bitwisearts.android.ble.utility.MessageAccumulator
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 
@@ -74,7 +75,6 @@ class Message(
 			val messageLength = rawMessageBytes.size + messageIdBytes.size
 			val sizePrefixBytes = serializeUnsignedInt(messageLength)
 			writeBytes(sizePrefixBytes)
-//			writeBytes(serializeUnsignedInt(messageLength))
 			writeBytes(serializeUnsignedInt(id))
 			writeBytes(message.toByteArray())
 			return output.toByteArray()
@@ -110,23 +110,17 @@ class Message(
 class MessageDeserializer(initialPayload: ByteArray)
 {
 	/**
-	 * The total expected size of the message, excluding the size prefix.
+	 * The [MessageAccumulator] used to accumulate the message bytes as they
+	 * are received.
 	 */
-	val messageSize: Int
-
-	/**
-	 * The input stream that accumulates the message bytes as they are
-	 * received.
-	 */
-	val messageInputStream = ByteArrayOutputStream()
+	val accumulator: MessageAccumulator
 
 	init
 	{
 		val (sizePrefix, remaining) = readSizePrefix(initialPayload)
 		Log.d(TAG, "Size prefix: $sizePrefix")
 		Log.d(TAG, "Remaining: ${remaining.size} bytes")
-		messageSize = sizePrefix
-		messageInputStream.write(remaining)
+		accumulator = MessageAccumulator(sizePrefix, remaining)
 	}
 
 	/**
@@ -134,7 +128,7 @@ class MessageDeserializer(initialPayload: ByteArray)
 	 */
 	fun additionalPayload(additionalPayload: ByteArray)
 	{
-		messageInputStream.write(additionalPayload)
+		accumulator.addChunk(additionalPayload)
 	}
 
 	/**
@@ -142,12 +136,13 @@ class MessageDeserializer(initialPayload: ByteArray)
 	 * indicates that all bytes have been received, `false` indicates that more
 	 * bytes are still expected.
 	 */
-	val hasAllBytes: Boolean get() = messageInputStream.size() == messageSize
+	val hasAllBytes: Boolean get() = accumulator.hasAllBytes
+
 
 	/**
 	 * The number of bytes that have been received so far for this message.
 	 */
-	val currentReceivedBytes: Int get() = messageInputStream.size()
+	val currentReceivedBytes: Int get() = accumulator.currentReceivedBytes
 
 	/**
 	 * Deserializes and answer the complete [Message] from the accumulated
@@ -162,10 +157,10 @@ class MessageDeserializer(initialPayload: ByteArray)
 		{
 			throw SerializationException(
 				"Cannot deserialize message; only " +
-					"${messageInputStream.size()} of $messageSize " +
+					"$currentReceivedBytes of ${accumulator.messageSize} " +
 					"bytes have been received")
 		}
-		val input = ByteArrayInputStream(messageInputStream.toByteArray())
+		val input = ByteArrayInputStream(accumulator.bytes)
 		val messageId = readUnsignedInt(input)
 		val messageBytes = input.readBytes()
 		return Message(messageId, String(messageBytes))

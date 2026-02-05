@@ -289,14 +289,24 @@ private fun PeripheralViewActivePreview()
 }
 
 /**
- * The [ViewModel] for the [PeripheralView].
+ * The [ViewModel] for the [PeripheralView]. This ViewModel manages the state
+ * and behavior of a BLE peripheral, allowing an Android device to advertise
+ * itself as a BLE peripheral that other devices can connect to.
+ *
+ * This ViewModel provides functionality to:
+ * - Start and stop the BLE peripheral
+ * - Send notifications to connected central devices
+ * - Update characteristic values that can be read by central devices
+ * - Monitor write operations from central devices
  *
  * @author Richard Arriaga
  */
 class PeripheralViewModel: ViewModel()
 {
     /**
-     * The [SampleBlePeripheral] being controlled by this [ViewModel].
+     * The [SampleBlePeripheral] being controlled by this [ViewModel]. This
+     * peripheral implements a sample BLE GATT server with read, write, and
+     * notify characteristics for demonstration and testing purposes.
      */
     val peripheral: SampleBlePeripheral = SampleBlePeripheral()
 
@@ -345,8 +355,6 @@ class PeripheralViewModel: ViewModel()
             Log.e(
                 "PeripheralViewModel",
                 "Error setting read characteristic value: $value", e)
-            // If the value is out of range, set it to 0
-            0
         }
     }
 

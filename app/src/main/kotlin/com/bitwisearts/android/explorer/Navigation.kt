@@ -89,12 +89,34 @@ enum class BottomNavRoute(
 		"ble_central")
 }
 
+/**
+ * Navigation route object for device-specific views. This represents the
+ * route pattern for navigating to a specific BLE device detail screen using
+ * its MAC address as a parameter.
+ *
+ * @author Richard Arriaga
+ */
 object DeviceRoute
 {
+	/**
+	 * The parameter name used in the route for the device MAC address.
+	 */
 	const val macParam = "mac_address"
 
+	/**
+	 * The route pattern string used in navigation. The MAC address parameter
+	 * will be substituted into the route at navigation time.
+	 */
 	const val route = "device/{$macParam}"
 
+	/**
+	 * Navigate to the device detail screen for the specified MAC address.
+	 *
+	 * @param navController
+	 *   The [NavController] used to perform the navigation.
+	 * @param macAddress
+	 *   The MAC address of the BLE device to display.
+	 */
 	fun navigate (
 		navController: NavController,
 		macAddress: String)

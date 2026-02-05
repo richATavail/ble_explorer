@@ -78,7 +78,7 @@ class SampleBleDevice(
 					TAG,
 					"Waiting for more bytes. Have " +
 						"${deserializer.currentReceivedBytes} of " +
-						"${deserializer.messageSize} bytes."
+						"${deserializer.accumulator.messageSize} bytes."
 				)
 			}
 		}
