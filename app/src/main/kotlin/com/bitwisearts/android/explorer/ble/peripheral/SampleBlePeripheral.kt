@@ -1,5 +1,6 @@
 package com.bitwisearts.android.explorer.ble.peripheral
 
+import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.util.Log
@@ -137,7 +138,10 @@ private class SampleBlePeripheralWriteCharacteristic(
 	private val characteristic: Characteristic
 ) : PeripheralCharacteristic(characteristic.uuid, characteristic.name) {
 	override val tag: String = "SampleBlePeripheralWriteChar"
-
+	override val properties: Int get() =
+		BluetoothGattCharacteristic.PROPERTY_WRITE
+	override val permissions: Int get() =
+		BluetoothGattCharacteristic.PERMISSION_WRITE
 	private val _writeValueFlow = MutableStateFlow(byteArrayOf())
 
 	/**

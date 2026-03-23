@@ -1,5 +1,6 @@
 package com.bitwisearts.android.explorer.ble.peripheral
 
+import android.bluetooth.BluetoothGattCharacteristic
 import android.util.Log
 import com.bitwisearts.android.ble.gatt.attribute.Characteristic
 import com.bitwisearts.android.ble.gatt.attribute.Descriptor
@@ -38,6 +39,11 @@ object SampleReadCharacteristic: Characteristic(
 		get() = SampleBleService
 	override val descriptors: Set<Descriptor> = emptySet()
 
+	override val properties: Int get() =
+		BluetoothGattCharacteristic.PROPERTY_READ
+	override val permissions: Int get() =
+		BluetoothGattCharacteristic.PERMISSION_READ
+
 	override fun stringifyValue(value: ByteArray): String =
 		try
 		{
@@ -64,6 +70,10 @@ object SampleWriteCharacteristic: Characteristic(
 	override val service: Service
 		get() = SampleBleService
 	override val descriptors: Set<Descriptor> = emptySet()
+	override val properties: Int get() =
+		BluetoothGattCharacteristic.PROPERTY_WRITE
+	override val permissions: Int get() =
+		BluetoothGattCharacteristic.PERMISSION_WRITE
 
 	override fun stringifyValue(value: ByteArray): String =
 		value.decodeToString()
@@ -83,6 +93,9 @@ object SampleNotifyCharacteristic: Characteristic(
 		get() = SampleBleService
 	override val descriptors: Set<Descriptor> =
 		setOf(ClientCharacteristicConfiguration)
+	override val properties: Int get() =
+		BluetoothGattCharacteristic.PROPERTY_NOTIFY
+	override val permissions: Int get() = 0
 	// TODO implement chunking based notify
 	override fun stringifyValue(value: ByteArray): String = String(value)
 }

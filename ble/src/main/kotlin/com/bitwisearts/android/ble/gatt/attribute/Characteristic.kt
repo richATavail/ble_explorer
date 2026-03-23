@@ -27,6 +27,32 @@ abstract class Characteristic constructor(
 		CharacteristicId(service.uuid, uuid) }
 
 	/**
+	 * The [BluetoothGattCharacteristic] properties supported by this
+	 * [Characteristic]. These are constructed using logical or operations
+	 * on [BluetoothGattCharacteristic.PROPERTY_READ],
+	 * [BluetoothGattCharacteristic.PROPERTY_WRITE], and
+	 * [BluetoothGattCharacteristic.PROPERTY_NOTIFY].
+	 *
+	 * It defaults to supporting all three properties.
+	 */
+	open val properties: Int get() =
+		BluetoothGattCharacteristic.PROPERTY_READ or
+			BluetoothGattCharacteristic.PROPERTY_WRITE or
+			BluetoothGattCharacteristic.PROPERTY_NOTIFY
+
+	/**
+	 * The [BluetoothGattCharacteristic] permissions supported by this
+	 * [Characteristic]. These are constructed using logical or operations
+	 * on [BluetoothGattCharacteristic.PERMISSION_READ] and
+	 * [BluetoothGattCharacteristic.PERMISSION_WRITE].
+	 *
+	 * It defaults to supporting both read and write.
+	 */
+	open val permissions: Int get() =
+		BluetoothGattCharacteristic.PERMISSION_READ or
+			BluetoothGattCharacteristic.PERMISSION_WRITE
+
+	/**
 	 * Answer a [DescriptorId] that uniquely identifies the provided
 	 * [Descriptor] for this [Characteristic].
 	 */

@@ -380,12 +380,8 @@ abstract class BaseBlePeripheral(
 					// accessible to ensure they can be used in any way.
 					val cc = BluetoothGattCharacteristic(
 						c.uuid,
-						BluetoothGattCharacteristic.PROPERTY_READ
-							or BluetoothGattCharacteristic.PROPERTY_WRITE
-							or BluetoothGattCharacteristic.PROPERTY_NOTIFY,
-						BluetoothGattCharacteristic.PERMISSION_READ
-							or BluetoothGattCharacteristic.PERMISSION_WRITE
-
+						c.properties,
+						c.permissions
 					)
 					c.descriptors.forEach { d ->
 						Log.d(tag, "      Adding descriptor: ${d.name} (${d.uuid})")

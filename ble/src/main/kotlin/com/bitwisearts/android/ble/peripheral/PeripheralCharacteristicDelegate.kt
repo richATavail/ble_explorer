@@ -30,6 +30,8 @@ class PeripheralCharacteristicDelegate(
 			PeripheralDescriptorDelegate(it)
 		}.toSet()
 	}
+	override val properties: Int get() = characteristic.properties
+	override val permissions: Int get() = characteristic.permissions
 	override val service: Service
 		get() = characteristic.service
 	override val descriptors: Set<Descriptor> get() = descriptorDelegates
